@@ -1,0 +1,9 @@
+litellm
+python-dotenv
+requests
+beautifulsoup4
+apscheduler
+fastapi
+uvicorn
+pydantic
+sqlalchemy
