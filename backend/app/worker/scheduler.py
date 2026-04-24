@@ -1,4 +1,5 @@
 from apscheduler.schedulers.background import BackgroundScheduler
+import asyncio
 
 from app.core.maestro import MaestroOrchestrator
 
@@ -8,7 +9,7 @@ def start_cron_jobs():
     scheduler = BackgroundScheduler()
 
     scheduler.add_job(
-        lambda: orchestrator.execute_workflow("https://example.com"),
+        lambda: asyncio.run(orchestrator.execute_workflow("Hãy nghiên cứu về các xu hướng công nghệ mới nhất.")),
         'cron', hour=0
     )
 

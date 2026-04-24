@@ -1,18 +1,16 @@
-import os
-
 import litellm
-from dotenv import load_dotenv
 from litellm import completion
 
-load_dotenv()
+from config import settings
+
 litellm.set_verbose = True
 
 
 class BrainService:
     def __init__(self):
-        self.base_url = os.getenv("OPENROUTER_URL")
-        self.api_key = os.getenv("OPENROUTER_KEY")
-        self.model = f"openrouter/{os.getenv("OPENROUTER_MODEL")}"
+        self.base_url = settings.OPENROUTER_URL
+        self.api_key = settings.OPENROUTER_KEY
+        self.model = f"openrouter/{settings.OPENROUTER_MODEL}"
 
     def call_ai(self, messages: list):
         try:

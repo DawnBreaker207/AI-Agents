@@ -1,33 +1,36 @@
+import logging  # Import logging
 import os
 from contextlib import asynccontextmanager
 
 import uvicorn
-from dotenv import load_dotenv
 from fastapi import FastAPI
 
-from app.api.routes import router as agent_router
+from app.router import api_router
+from app.config import settings
 from app.worker.scheduler import start_cron_jobs
 from database import engine, Base
 
-load_dotenv()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("--- Hệ thống Agent đang khởi động ---")
+    logging.basicConfig(level=logging.INFO)
+    logger.info("--- Hệ thống Agent đang khởi động ---")
     start_cron_jobs()
     yield
-    print("--- Hệ thống Agent đang đóng ---")
+    logger.info("--- Hệ thống Agent đang đóng ---")
 
 
-if not os.path.exists('data'):
-    os.makedirs('data')
+if not os.path.exists(settings.DATA_DIR):
+    os.makedirs(settings.DATA_DIR)
+
 Base.metadata.create_all(bind=engine)
 app = FastAPI(
-    title=os.getenv("APP_NAME"),
+    title=settings.APP_NAME,
     lifespan=lifespan
 )
-app.include_router(agent_router)
+app.include_router(api_router)
 
 if __name__ == "__main__":
     uvicorn.run(
