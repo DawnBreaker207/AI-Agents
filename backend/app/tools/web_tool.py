@@ -10,7 +10,11 @@ def get_web_content(url: str):
             'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
 
         }
-        res = requests.get(url, timeout=10, headers=headers, verify=true)
+        res = requests.get(
+            url,
+            timeout=10,
+            headers=headers,
+            verify=True)
         res.raise_for_status()
         res.encoding = 'utf-8'
         soup = BeautifulSoup(res.text, "html.parser")
