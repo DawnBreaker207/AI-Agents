@@ -33,6 +33,14 @@ async def research_topic(
         user_prompt = f"Hãy nghiên cứu về chủ đề sau: '{topic}'. Tìm các tin tức, bài báo liên quan, và tổng hợp lại thành một báo cáo chi tiết."
         logger.info(f"Starting research for topic: '{topic}'")
         report_data = await agent_engine.run(user_prompt)
+
+        if not report_data or not report_data.get("summary") or len(report_data.get("summary")) < 10:
+            logger.warning(f"Research failed or returned empty data for topic: {topic}")
+            raise HTTPException(
+                status_code=422,
+                detail="Agent không tìm thấy thông tin hữu ích cho chủ đề này. Dữ liệu không được lưu."
+            )
+
         raw_sentiment = report_data.get("sentiment")
         valid_sentiment = clean_sentiment(raw_sentiment)
 
@@ -75,10 +83,62 @@ async def get_history(db: Session = Depends(get_db)):
     reports = db.query(ResearchReportModel).order_by(ResearchReportModel.id.desc()).all()
     results = []
     for r in reports:
-        results.append(ResearchReport.model_validate(r, update={
-            "key_points": json.loads(r.key_points),
-            "sources": json.loads(r.sources),
-            "categories": json.loads(r.categories),
-            "regions": json.loads(r.regions)
-        }))
+
+        def parse_json_column(data):
+            if not data:
+                return []
+            if isinstance(data, list):  # Trường hợp key_points đã là list
+                return data
+            try:
+                return json.loads(data)
+            except (json.JSONDecodeError, TypeError):
+                return [data]
+
+        report_data = {
+            "id": r.id,
+            "title": r.title,
+            "summary": r.summary,
+            "sentiment": r.sentiment,
+            "created_at": r.created_at,
+            "key_points": r.key_points if isinstance(r.key_points, list) else parse_json_column(r.key_points),
+            "sources": parse_json_column(r.sources),
+            "categories": parse_json_column(r.categories),
+            "regions": parse_json_column(r.regions),
+        }
+        results.append(ResearchReport.model_validate(report_data))
     return results
+
+
+@agent_router.get("/report/{report_id}", response_model=ResearchReport, summary="Lấy chi tiết một báo cáo nghiên cứu")
+async def get_report_by_id(report_id: int, db: Session = Depends(get_db)):
+    r = db.query(ResearchReportModel).filter(ResearchReportModel.id == report_id).first()
+
+    if not r:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Không tìm thấy báo cáo nghiên cứu với ID: {report_id}"
+        )
+
+    def parse_json_column(data):
+        if not data:
+            return []
+        if isinstance(data, list):
+            return data
+        try:
+            return json.loads(data)
+        except (json.JSONDecodeError, TypeError):
+            return [data]
+
+    report_data = {
+        "id": r.id,
+        "title": r.title,
+        "summary": r.summary,
+        "sentiment": r.sentiment,
+        "created_at": r.created_at,
+        "key_points": r.key_points if isinstance(r.key_points, list) else parse_json_column(r.key_points),
+        "sources": parse_json_column(r.sources),
+        "categories": parse_json_column(r.categories),
+        "regions": parse_json_column(r.regions),
+    }
+
+    return ResearchReport.model_validate(report_data)

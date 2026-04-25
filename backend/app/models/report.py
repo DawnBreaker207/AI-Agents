@@ -11,13 +11,13 @@ class ResearchReportModel(Base):
     title = Column(String, nullable=False)
 
     summary = Column(Text, nullable=True)
-    sources = Column(Text, nullable=True)
+    sources = Column(JSON, nullable=True)
 
     key_points = Column(JSON, nullable=True)
     sentiment = Column(String, nullable=True)
 
-    categories = Column(Text, nullable=True)
-    regions = Column(Text, nullable=True)
+    categories = Column(JSON, nullable=True)
+    regions = Column(JSON, nullable=True)
 
     token_usage_saved = Column(Integer, default=0)
 
