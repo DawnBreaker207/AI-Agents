@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -28,24 +28,40 @@ def clean_sentiment(raw_val: str) -> SentimentEnum:
 
 
 class ResearchReport(BaseModel):
-    id: Optional[int] = Field(None, description="ID duy nhất của báo cáo, thường được tạo bởi cơ sở dữ liệu.")
-    title: str = Field(..., description="Tiêu đề của báo cáo nghiên cứu.")
-    summary: Optional[str] = Field(None, description="Tóm tắt nội dung chính của báo cáo.")
-    key_points: List[str] = Field(default_factory=list, description="Các điểm chính được rút ra từ báo cáo.")
-    sentiment: SentimentEnum = Field(SentimentEnum.UNDEFINED, description="Cảm xúc tổng thể của báo cáo.")
-    sources: List[str] = Field(default_factory=list, description="Danh sách các nguồn tham khảo được sử dụng.")
-    created_at: datetime = Field(..., description="Thời điểm báo cáo được tạo (UTC).")
-    categories: List[str] = Field(
-        default_factory=list,
-        description="Các danh mục chính của báo cáo (ví dụ: 'Công nghệ', 'Thị trường', 'Tuyển dụng')."
-    )
-    regions: List[str] = Field(
-        default_factory=list,
-        description="Các khu vực địa lý mà báo cáo đề cập (ví dụ: 'Toàn cầu', 'Việt Nam', 'Châu Á')."
-    )
+    id: Optional[int] = None
+    title: str
+    topic: Optional[str] = None
+    summary: Optional[str] = None
+    impact_score: float = 0.0
+
+    tech_trends: Optional[List[Dict]] = []
+    employment_status: Optional[Dict] = {}
+    job_details: Optional[Dict] = {}
+    research_articles: Optional[List[Dict]] = []
+
+    categories: Optional[List[str]] = []
+    regions: Optional[List[str]] = []
+    sentiment: Optional[str] = "Trung tính"
+    sources: List[str] = []
+    created_at: datetime
+    last_updated: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class ResearchRequest(BaseModel):
-    topic: str = Field(..., description="Chủ đề cần nghiên cứu")
+    topic: str
+    force_refresh: bool = False
+
+
+class SoftwareReportSchema(BaseModel):
+    summary: str
+    impact_score: float
+    categories: List[str]
+    regions: List[str]
+    tech_trends: List[Dict]
+    employment_status: Dict
+    job_details: Dict
+    research_articles: List[Dict]
+    sentiment: str
+    sources: List[str]
