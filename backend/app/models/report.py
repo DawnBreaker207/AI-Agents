@@ -1,6 +1,8 @@
-from sqlalchemy import Column, Integer, Text, String, DateTime
+from sqlalchemy import Column, Integer, Text, String, DateTime, JSON
 from sqlalchemy.sql import func
+
 from database import Base
+
 
 class ResearchReportModel(Base):
     __tablename__ = "reports"
@@ -11,7 +13,7 @@ class ResearchReportModel(Base):
     summary = Column(Text, nullable=True)
     sources = Column(Text, nullable=True)
 
-    key_points = Column(Text, nullable=True)
+    key_points = Column(JSON, nullable=True)
     sentiment = Column(String, nullable=True)
 
     categories = Column(Text, nullable=True)

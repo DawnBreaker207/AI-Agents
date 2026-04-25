@@ -1,8 +1,11 @@
-import json
 import inspect
+import json
 import logging
-from .brain import BrainService
+import re
+
 from app.tools import TOOL_REGISTRY
+from .brain import BrainService
+from .prompt import FINAL_SUMMARY_PROMPT, FORCE_FINISH_PROMPT, RESEARCH_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -12,52 +15,44 @@ class AgentEngine:
         self.brain = BrainService()
         self.max_iterations = 15
 
+    async def _final_summary(self, messages):
+        messages.append({"role": "user", "content": FINAL_SUMMARY_PROMPT})
+
+        final_res = self.brain.call_ai(messages)
+        try:
+            import re
+            json_match = re.search(r'\{.*\}', final_res, re.DOTALL)
+            clean_res = json_match.group(0) if json_match else final_res
+            data = json.loads(clean_res)
+            return data.get('answer') if 'answer' in data else data
+        except:
+            return {
+                "summary": "Không thể tổng hợp báo cáo chi tiết, nhưng đã hoàn thành tìm kiếm.",
+                "key_points": [], "sentiment": "Trung tính", "sources": [], "categories": [], "regions": []
+            }
+
     async def run(self, user_prompt):
-        tool_descriptions = "\n".join([f"- {name}: {info['description']}" for name, info in TOOL_REGISTRY.items()])
-
-        system_prompt = f"""Bạn là một Agent AI chuyên phân tích thị trường công nghệ, với nhiệm vụ tìm kiếm và tổng hợp thông tin để trả lời câu hỏi của người dùng.
-
-QUY TRÌNH LÀM VIỆC ĐỀ XUẤT:
-1.  **Suy nghĩ**: Dựa vào yêu cầu của người dùng, hãy xác định những từ khóa tìm kiếm phù hợp.
-2.  **Hành động (search_the_web)**: Sử dụng công cụ `search_the_web` với những từ khóa đã xác định để tìm các bài báo hoặc nguồn tin tức liên quan.
-3.  **Suy nghĩ**: Xem xét kết quả tìm kiếm. Chọn ra 2-3 URL hứa hẹn nhất để đọc chi tiết.
-4.  **Hành động (read_web_content)**: Sử dụng công cụ `read_web_content` lần lượt với từng URL đã chọn để lấy nội dung chi tiết.
-5.  **Suy nghĩ và Hoàn thành**: Sau khi đã có đủ thông tin, tổng hợp lại thành một báo cáo hoàn chỉnh và kết thúc nhiệm vụ.
-
-CÁC CÔNG CỤ BẠN CÓ:
-{tool_descriptions}
-
-QUY ĐỊNH TRẢ VỀ JSON:
-- Luôn trả về một JSON object.
-- Nếu `status` là 'continue', `answer` có thể là một chuỗi trống.
-- Nếu `status` là 'finished', `answer` PHẢI là một JSON Object có cấu trúc sau:
-    {{
-        "summary": "Một đoạn tóm tắt chính, trả lời trực tiếp câu hỏi của người dùng.",
-        "key_points": ["Điểm chính 1", "Điểm chính 2", "Điểm chính 3"],
-        "sentiment": "Tích cực/Tiêu cực/Trung lập (Dựa trên các tin tức tìm được)",
-        "sources": ["url_nguon_1", "url_nguon_2"],
-        "categories: ["Công nghệ"],
-        "regions": ["Toàn cầu]
-    }}
-
-MẪU JSON CHO MỖI BƯỚC:
-{{
-    "thought": "Suy nghĩ của bạn về bước tiếp theo.",
-    "tool": "tên_công_cụ_sẽ_dùng (hoặc null nếu muốn kết thúc)",
-    "args": "tham_số_cho_công_cụ",
-    "status": "continue (nếu cần thêm bước) hoặc finished (nếu đã đủ thông tin để trả lời)",
-    "answer": {{ ... cấu trúc như trên nếu status là finished ... }}
-}}
-"""
+        tool_text = "\n".join([f"- {name}: {info['description']}" for name, info in TOOL_REGISTRY.items()])
+        steps_text = "1. Tìm kiếm -> 2. Đọc -> 3. Tổng hợp"
+        system_prompt = RESEARCH_SYSTEM_PROMPT.format(
+            tool_descriptions=tool_text,
+            process_steps=steps_text
+        )
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ]
         for i in range(self.max_iterations):
+
+            if i >= self.max_iterations - 2:
+                force_prompt = FORCE_FINISH_PROMPT
+                messages.append({"role": "system",
+                                 "content": force_prompt})
             raw_res = self.brain.call_ai(messages)
 
             try:
-                clean_res = raw_res.replace("```json", "").replace("```", "").strip()
+                json_match = re.search(r'\{.*\}', raw_res, re.DOTALL)
+                clean_res = json_match.group(0) if json_match else raw_res
                 decision = json.loads(clean_res)
             except json.JSONDecodeError:
                 print(f"[Bước {i + 1}] ❌ Lỗi: AI trả về JSON không hợp lệ. Đang thử lại.")
@@ -67,9 +62,11 @@ MẪU JSON CHO MỖI BƯỚC:
 
             print(f"--- Bước {i + 1}: AI đang nghĩ: {decision.get('thought', 'Không có suy nghĩ')}")
 
-            if decision.get('status') == 'finished':
+            if decision.get('status') == 'finished' or i == self.max_iterations - 1:
                 print(f"[Bước {i + 1}] ✅ Hoàn thành nhiệm vụ!")
-                return decision.get('answer', {"summary": "Không có câu trả lời."})
+                if not decision.get('answer') or i == self.max_iterations - 1:
+                    return await self._final_summary(messages)
+                return decision.get('answer')
 
             tool_name = decision.get('tool')
             if tool_name in TOOL_REGISTRY:
@@ -94,5 +91,5 @@ MẪU JSON CHO MỖI BƯỚC:
                 messages.append({"role": "system",
                                  "content": "Bạn chưa chọn một công cụ hợp lệ. Hãy suy nghĩ lại và chọn một hành động từ danh sách công cụ của bạn, hoặc kết thúc nhiệm vụ nếu bạn đã có đủ thông tin."})
 
-        return {"summary": "Agent không thể hoàn thành nhiệm vụ sau 7 bước.", "key_points": [],
+        return {"summary": f"Agent không thể hoàn thành nhiệm vụ sau {self.max_iterations} bước.", "key_points": [],
                 "sentiment": "Không xác định", "sources": [], "categories": [], "regions": []}

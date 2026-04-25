@@ -1,15 +1,14 @@
 import json
+import logging
 from datetime import datetime, timezone
 from typing import List
-import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.functions import current_time
 
 from app.core.engine import AgentEngine
 from app.models.report import ResearchReportModel
-from app.schemas.schemas import ResearchReport, SentimentEnum, ResearchRequest
+from app.schemas.schemas import ResearchReport, ResearchRequest
 from database import get_db
 from schemas.schemas import clean_sentiment
 
@@ -64,7 +63,8 @@ async def research_topic(
         db.commit()
         db.refresh(db_report)
 
-        return db_report
+        research_report.id = db_report.id
+        return research_report
     except Exception as e:
         logger.error(f"Error during research for topic '{topic}': {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Đã xảy ra lỗi trong quá trình nghiên cứu: {str(e)}")
