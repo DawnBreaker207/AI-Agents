@@ -15,6 +15,7 @@ import {Bell, Search} from "lucide-react";
 import {Input} from "~/components/ui/input";
 import {Avatar, AvatarFallback, AvatarImage} from "~/components/ui/avatar";
 import {TooltipProvider} from "~/components/ui/tooltip";
+import {ModeToggle} from "~/components/mode-toggle";
 
 
 export function DashboardLayout() {
@@ -48,6 +49,7 @@ export function DashboardLayout() {
                         </div>
 
                         <div className="flex items-center gap-4">
+
                             {/* Search Bar */}
                             <div className="relative w-64 hidden lg:block">
                                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground"/>
@@ -62,6 +64,8 @@ export function DashboardLayout() {
                                 <Bell size={20}/>
                                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full"></span>
                             </button>
+
+                            <ModeToggle/>
 
                             <Avatar className="h-9 w-9 border">
                                 <AvatarImage src="https://github.com/shadcn.png"/>
