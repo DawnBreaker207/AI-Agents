@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from app.models.report import ResearchReportModel
 from app.schemas.schemas import ResearchReport, ResearchRequest
 from core.maestro import MaestroOrchestrator
-from app.core import maestro
 from database import get_db
 
 agent_router = APIRouter()
@@ -57,27 +56,23 @@ async def get_history(db: Session = Depends(get_db)):
     reports = db.query(ResearchReportModel).order_by(ResearchReportModel.id.desc()).all()
     results = []
     for r in reports:
-
-        def parse_json_column(data):
-            if not data:
-                return []
-            if isinstance(data, list):  # Trường hợp key_points đã là list
-                return data
-            try:
-                return json.loads(data)
-            except (json.JSONDecodeError, TypeError):
-                return [data]
-
         report_data = {
             "id": r.id,
+            "topic": getattr(r, "topic", r.title),
             "title": r.title,
             "summary": r.summary,
             "sentiment": r.sentiment,
+            "impact_score": getattr(r, "impact_score", 0.0),
             "created_at": r.created_at,
-            "key_points": r.key_points if isinstance(r.key_points, list) else parse_json_column(r.key_points),
-            "sources": parse_json_column(r.sources),
             "categories": parse_json_column(r.categories),
             "regions": parse_json_column(r.regions),
+            "sources": parse_json_column(r.sources),
+            "last_updated": str(r.created_at),
+
+            "tech_trends": parse_json_column(getattr(r, "tech_trends", []), []),
+            "employment_status": parse_json_column(getattr(r, "employment_status", {}), {}),
+            "job_details": parse_json_column(getattr(r, "job_details", {}), {}),
+            "research_articles": parse_json_column(getattr(r, "research_articles", []), [])
         }
         results.append(ResearchReport.model_validate(report_data))
     return results
@@ -93,26 +88,36 @@ async def get_report_by_id(report_id: int, db: Session = Depends(get_db)):
             detail=f"Không tìm thấy báo cáo nghiên cứu với ID: {report_id}"
         )
 
-    def parse_json_column(data):
-        if not data:
-            return []
-        if isinstance(data, list):
-            return data
-        try:
-            return json.loads(data)
-        except (json.JSONDecodeError, TypeError):
-            return [data]
-
     report_data = {
         "id": r.id,
+        "topic": getattr(r, "topic", r.title),
         "title": r.title,
         "summary": r.summary,
         "sentiment": r.sentiment,
+        "impact_score": getattr(r, "impact_score", 0.0),
         "created_at": r.created_at,
-        "key_points": r.key_points if isinstance(r.key_points, list) else parse_json_column(r.key_points),
-        "sources": parse_json_column(r.sources),
         "categories": parse_json_column(r.categories),
         "regions": parse_json_column(r.regions),
+        "sources": parse_json_column(r.sources),
+        "last_updated": str(r.created_at),
+
+        "tech_trends": parse_json_column(getattr(r, "tech_trends", []), []),
+        "employment_status": parse_json_column(getattr(r, "employment_status", {}), {}),
+        "job_details": parse_json_column(getattr(r, "job_details", {}), {}),
+        "research_articles": parse_json_column(getattr(r, "research_articles", []), [])
     }
 
     return ResearchReport.model_validate(report_data)
+
+
+def parse_json_column(data, default_value=None):
+    if default_value is None:
+        default_value = []
+    if not data:
+        return default_value
+    if isinstance(data, (list, dict)):
+        return data
+    try:
+        return json.loads(data)
+    except (json.JSONDecodeError, TypeError):
+        return default_value
