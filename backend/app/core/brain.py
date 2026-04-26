@@ -1,6 +1,6 @@
+import requests
 import litellm
 from litellm import completion
-
 from config import settings
 
 litellm.set_verbose = True
@@ -21,10 +21,25 @@ class BrainService:
                 api_key=self.api_key,
                 base_url=self.base_url,
                 response_format={"type": "json_object"},
-                max_tokens=2000,
-                temperature=0.3,
+                max_tokens=4000,
+                temperature=0.5,
             )
             return response.choices[0].message.content
         except Exception as e:
             print(f"!!! Lỗi LiteLLM: {str(e)}")
             raise e
+
+    def get_credit_balance(self):
+        try:
+            headers = {"Authorization": f"Bearer {self.api_key}"}
+            response = requests.get("https://openrouter.ai/api/v1/auth/key", headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                limit = data['data']['limit']
+                usage = data['data']['usage']
+                remaining = limit - usage
+                return round(remaining, 4)
+            return 0
+        except Exception as e:
+            print(f"Lỗi check balance: {e}")
+            return 0

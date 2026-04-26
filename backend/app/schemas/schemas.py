@@ -65,3 +65,8 @@ class SoftwareReportSchema(BaseModel):
     research_articles: List[Dict]
     sentiment: str
     sources: List[str]
+
+
+class ChatRequest(BaseModel):
+    prompt: str
+    category: Optional[str] = "all"
