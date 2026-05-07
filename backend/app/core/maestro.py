@@ -1,71 +1,63 @@
 import logging
-from datetime import datetime, timezone, timedelta
-
-from requests import Session
-
-from app.core.engine import AgentEngine
-from app.models.report import ResearchReportModel
+from sqlalchemy.orm import Session
+from app.stages.stage1_scout import ScoutStage
+from app.stages.stage2_filter import FilterStage
+from app.stages.stage3_deep import DeepAnalysisStage
+from app.stages.stage4_writer import WriterStage
+from app.tools.database_ops import save_to_dashboard
+from core.utils import parse_xml_tag
 
 logger = logging.getLogger(__name__)
 
 
 class MaestroOrchestrator:
     def __init__(self):
-        self.agent_engine = AgentEngine()
+        self.scout = ScoutStage()
+        self.filter = FilterStage()
+        self.deep = DeepAnalysisStage()
+        self.writer = WriterStage()
 
-    def is_outdated(self, report):
-        if not report.last_updated:
-            return True
+    async def execute_workflow(self, topic: str, db: Session):
+        logger.info(f"🚀 Bắt đầu TSI Pipeline cho: {topic}")
 
-        now = datetime.now(timezone.utc)
-        last_updated = report.last_updated.replace(
-            tzinfo=timezone.utc) if report.last_updated.tzinfo is None else report.last_updated
-        return now - last_updated > timedelta(hours=24)
+        # STAGE 1: Thu thập dữ liệu thô
+        raw_data = await self.scout.run(topic)
+        if not raw_data:
+            return {"status": "skipped", "msg": "Không có tin tức kích hoạt bẫy."}
 
-    async def execute_workflow(self, topic: str, db: Session, force_refresh: bool = False):
-        #
-        existing_report = db.query(ResearchReportModel).filter(
-            ResearchReportModel.topic == topic
-        ).first()
+        # STAGE 2: Lọc tin chất lượng cao
+        signals = self.filter.run(raw_data)
+        high_priority = [s for s in signals if s.get("priority_score", 0) >= 7]
+        if not high_priority:
+            return {"status": "skipped", "msg": "Điểm ưu tiên thấp, hủy phân tích."}
 
-        #
-        if existing_report and not force_refresh:
-            if not self.is_outdated(existing_report):
-                logger.info(f"Maestro: Trả về Cache cho: {topic}")
-                return existing_report
+        # STAGE 3: Phân tích sâu (Trả về chuỗi có thẻ <analysis>)
+        deep_result = await self.deep.run(high_priority)
+        if deep_result.get("status") == "error":
+            return {"status": "error", "msg": deep_result.get("analysis")}
+        # Trích xuất dữ liệu JSON từ Stage 3
+        extracted_data = deep_result.get("raw_json", {})
 
-        #
-        logger.info(f"Maestro: Nghiên cứu mới cho: {topic}")
-        report_data = await self.agent_engine.run(topic)
+        # STAGE 4: Biên tập báo cáo
+        # Lấy phần text phân tích sạch từ JSON để Writer biên tập,
+        # tránh đưa nguyên đống JSON cho Writer.
+        analysis_text = deep_result.get("analysis", "")
+        final_report = self.writer.run({"analysis": analysis_text})
 
-        if not isinstance(report_data, dict):
-            report_data = {"summary": str(report_data)}
+        # Xử lý tags duy nhất (Unique)
+        unique_tags = list(set([tag for s in high_priority for tag in s.get("keywords", [])]))
 
-        update_data = {
-            "summary": report_data.get("summary", ""),
-            "impact_score": float(report_data.get("impact_score", 0.0)),
-            "categories": report_data.get("categories", []),
-            "regions": report_data.get("regions", []),
-            "tech_trends": report_data.get("tech_trends", []),
-            "employment_status": report_data.get("employment_status", {}),
-            "job_details": report_data.get("job_details", {}),
-            "research_articles": report_data.get("research_articles", []),
-            "sources": report_data.get("sources", []),
-            "sentiment": report_data.get("sentiment", "Trung tính"),
-            "last_updated": datetime.now(timezone.utc)
+        # CHUẨN BỊ DỮ LIỆU LƯU TRỮ
+        db_data = {
+            "title": f"Báo cáo chiến lược: {topic}",
+            "summary": final_report,  # Nội dung Markdown bài viết
+            "impact_score": extracted_data.get("impact_score", 5),
+            "tags": unique_tags,
+            "raw_analysis": extracted_data,  # Lưu toàn bộ JSON gốc để API dùng
+            "url": high_priority[0].get("url", "") if high_priority else ""
         }
 
-        #
-        if existing_report:
-            for key, value in update_data.items():
-                setattr(existing_report, key, value)
-        else:
-            new_report = ResearchReportModel(
-                topic=topic,
-                title=f"Báo cáo chiến lược: {topic}",
-                created_at=datetime.now(timezone.utc),
-                **update_data
-            )
-            db.add(new_report)
-        db.commit()
-        return existing_report or new_report
+        report_record = save_to_dashboard(db, db_data)
+
+        logger.info(f"✅ Hoàn thành TSI Pipeline! ID: {report_record.id}")
+        return {"status": "success", "report_id": report_record.id}

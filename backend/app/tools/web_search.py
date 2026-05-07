@@ -1,29 +1,23 @@
-from ddgs import DDGS
-import json
 import logging
 
+from ddgs import DDGS
+
+logger = logging.getLogger(__name__)
 
 def search_the_web(query: str):
-    if not query:
-        return "Lỗi: Cần có câu truy vấn để tìm kiếm."
-
+    """Tìm kiếm web và trả về danh sách các kết quả dạng dictionary"""
+    results = []
     try:
         with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=5))
-
-        if not results:
-            return "Không tìm thấy kết quả nào."
-
-        simplified_results = []
-        for r in results:
-            simplified_results.append({
-                "title": r.get('title'),
-                "href": r.get('href'),
-                "body": r.get('body')
-            })
-
-        return json.dumps(simplified_results, ensure_ascii=False)
-
+            # Lấy 5 kết quả tìm kiếm
+            ddgs_gen = ddgs.text(query, max_results=5)
+            for r in ddgs_gen:
+                results.append({
+                    "title": r.get('title', ''),
+                    "body": r.get('body', ''),
+                    "href": r.get('href', '')
+                })
+        return results
     except Exception as e:
-        logging.error(f"Error during web search for query '{query}': {e}")
-        return f"Lỗi trong quá trình tìm kiếm: {str(e)}"
+        logger.error(f"Lỗi tìm kiếm DuckDuckGo: {e}")
+        return []

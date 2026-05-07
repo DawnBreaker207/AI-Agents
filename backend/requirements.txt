@@ -4,7 +4,10 @@ requests
 beautifulsoup4
 apscheduler
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
 sqlalchemy
 ddgs
+httpx
+pydantic-settings
+pydantic

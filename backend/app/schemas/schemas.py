@@ -1,31 +1,16 @@
-from pydantic import BaseModel, Field, ConfigDict
+from datetime import datetime
 from typing import List, Optional, Dict
-from datetime import datetime, timezone
-from enum import Enum
+
+from pydantic import BaseModel, Field, ConfigDict
 
 
-class SentimentEnum(str, Enum):
-    POSITIVE = "Tích cực"
-    NEGATIVE = "Tiêu cực"
-    NEUTRAL = "Trung tính"
-    UNDEFINED = "Không xác định"
+class ResearchRequest(BaseModel):
+    topic: str = Field(..., description="Chủ đề cần nghiên cứu (VD: Thị trường AI Việt Nam)")
+    force_refresh: Optional[bool] = False
 
-
-def clean_sentiment(raw_val: str) -> SentimentEnum:
-    if not raw_val:
-        return SentimentEnum.UNDEFINED
-
-    mapping = {
-        "Trung lập": SentimentEnum.NEUTRAL,
-        "Trung tính": SentimentEnum.NEUTRAL,
-        "Neutral": SentimentEnum.NEUTRAL,
-        "Tích cực": SentimentEnum.POSITIVE,
-        "Positive": SentimentEnum.POSITIVE,
-        "Tiêu cực": SentimentEnum.NEGATIVE,
-        "Negative": SentimentEnum.NEGATIVE
-    }
-    return mapping.get(raw_val.strip(), SentimentEnum.UNDEFINED)
-
+class ChatRequest(BaseModel):
+    prompt: str
+    category: Optional[str] = "all"
 
 class ResearchReport(BaseModel):
     id: Optional[int] = None
@@ -49,24 +34,22 @@ class ResearchReport(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class ResearchRequest(BaseModel):
-    topic: str
-    force_refresh: bool = False
+# --- RESPONSE SCHEMAS ---
+class ReportResponse(BaseModel):
+    id: int
+    title: str
+    content: str
+    impact_score: int
+    tags: Optional[List[str]] = []
+    source_url: Optional[str] = None
+    created_at: datetime
 
+    class Config:
+        from_attributes = True
 
-class SoftwareReportSchema(BaseModel):
-    summary: str
-    impact_score: float
-    categories: List[str]
-    regions: List[str]
-    tech_trends: List[Dict]
-    employment_status: Dict
-    job_details: Dict
-    research_articles: List[Dict]
-    sentiment: str
-    sources: List[str]
-
-
-class ChatRequest(BaseModel):
-    prompt: str
-    category: Optional[str] = "all"
+# --- INTERMEDIATE SCHEMAS (Cho Stage 2) ---
+class SignalSchema(BaseModel):
+    title: str
+    keywords: List[str]
+    priority_score: int
+    url: str

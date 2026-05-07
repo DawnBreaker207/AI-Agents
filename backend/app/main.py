@@ -1,14 +1,14 @@
-import logging  # Import logging
+import logging
 import os
 from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
 
-from app.router import api_router
-from app.config import settings
+from app.api.v1.agent import api_router
+from app.core.config import settings
 from app.worker.scheduler import start_cron_jobs
-from database import engine, Base
+from app.database import engine, Base
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ app.include_router(api_router)
 
 if __name__ == "__main__":
     uvicorn.run(
-        "main:app",
+        "app.main:app",
         host="0.0.0.0",
         port=8888,
         reload=True)
