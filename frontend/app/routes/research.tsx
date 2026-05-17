@@ -1,160 +1,254 @@
-import {Activity, ArrowRight, Info, Loader2, ShieldCheck, Terminal, Zap} from "lucide-react";
-import {Button} from "~/components/ui/button";
-import {Link, useFetcher} from "react-router";
-import {Card, CardContent} from "~/components/ui/card";
-import {agentApi} from "~/lib/api";
-import {ScrollArea} from "~/components/ui/scroll-area";
-import {Badge} from "~/components/ui/badge";
-import type {ResearchReport} from "~/types";
+import {
+  Activity, ArrowRight, BookOpen, CheckCircle2,
+  Clock, Info, Loader2, Microscope, Terminal, Zap, AlertCircle
+} from "lucide-react";
+import { Button } from "~/components/ui/button";
+import { Link, useFetcher } from "react-router";
+import { startResearch } from "~/lib/api";
+import { Badge } from "~/components/ui/badge";
+import type { Route } from "./+types/research";
 
 type ActionData =
-    | { success: true; report: ResearchReport }
-    | { success: false; error: string };
+  | { success: true; report: { status: string; topic: string } }
+  | { success: false; error: string };
 
-export async function action({request}: { request: Request }) {
-    const formData = await request.formData();
-    const topic = formData.get("topic") as string;
+export const meta: Route.MetaFunction = () => [
+  { title: "Nghiên cứu chuyên sâu - TechScout Intelligence" },
+  { name: "description", content: "Kích hoạt AI Agent nghiên cứu chuyên sâu về bất kỳ chủ đề công nghệ nào." }
+];
 
-    try {
-        const report = await agentApi.startResearch(topic, true);
-        return {success: true, report};
-    } catch (error) {
-        return {success: false, error: "Agent protocol failure: Không thể truy cập luồng dữ liệu."};
-    }
+export async function action({ request }: Route.ActionArgs) {
+  const formData = await request.formData();
+  const topic = formData.get("topic") as string;
+
+  if (!topic?.trim()) {
+    return { success: false, error: "Vui lòng nhập chủ đề nghiên cứu." };
+  }
+
+  try {
+    const result = await startResearch(topic, true);
+    return { success: true, report: result };
+  } catch {
+    return { success: false, error: "Agent protocol failure: Không thể truy cập luồng dữ liệu." };
+  }
 }
 
+const EXAMPLE_TOPICS = [
+  "Phân tích tác động của GPT-5 đến ngành lập trình Việt Nam 2025",
+  "Xu hướng tuyển dụng AI Engineer tại Đông Nam Á Q2 2025",
+  "So sánh các framework AI Agent: LangGraph vs CrewAI vs AutoGen",
+  "Tác động của làn sóng layoff Big Tech đến thị trường IT Việt Nam",
+];
+
 export default function ResearchCenter() {
-    const fetcher = useFetcher<ActionData>();
-    const isRunning = fetcher.state !== "idle";
-    const result = fetcher.data;
-    return (
-        <div className="h-full bg-background flex flex-col overflow-y-auto relative">
-            {/* Grid background thích ứng theme */}
-            <div
-                className="absolute inset-0 bg-[radial-gradient(hsl(var(--muted-foreground)/0.15)_1px,transparent_1px)] bg-size-[24px_24px] pointer-events-none"/>
+  const fetcher = useFetcher<ActionData>();
+  const isRunning = fetcher.state !== "idle";
+  const result = fetcher.data;
 
-            <div className="relative p-8 max-w-4xl mx-auto w-full space-y-8 animate-in fade-in duration-700">
+  return (
+    <div className="max-w-4xl mx-auto flex flex-col gap-10 pb-16 animate-in fade-in duration-500">
 
-                {/* HEADER SECTION */}
-                <div className="space-y-2 border-l-4 border-primary pl-6">
-                    <h1 className="text-4xl font-black flex items-center gap-3 italic tracking-tighter text-foreground">
-                        <Activity className="text-primary animate-pulse" size={32}/>
-                        MAESTRO DEEP SCANNER
-                    </h1>
-                    <p className="text-muted-foreground text-xs font-mono uppercase tracking-[0.3em]">
-                        Advanced_Knowledge_Extraction_Protocol
-                    </p>
-                </div>
-
-                {/* FORM SECTION */}
-                <Card className="bg-card/50 backdrop-blur-xl border-border shadow-2xl rounded-[2rem] overflow-hidden">
-                    <CardContent className="p-8">
-                        <fetcher.Form method="post" className="space-y-6">
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center px-1">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-primary">
-                                        Research_Target_Prompt
-                                    </label>
-                                    <Badge variant="outline"
-                                           className="text-[9px] opacity-60 font-mono">ENGINE_v1.5</Badge>
-                                </div>
-                                <textarea
-                                    name="topic"
-                                    required
-                                    className="w-full min-h-35 bg-muted/50 border-input rounded-2xl p-5 text-sm text-foreground focus:ring-2 ring-primary/50 outline-none transition-all placeholder:text-muted-foreground/40 font-medium"
-                                    placeholder="Ví dụ: Phân tích sự dịch chuyển từ Microservices sang Monolith của các tập đoàn Tech năm 2025..."
-                                />
-                            </div>
-
-                            <Button
-                                type="submit"
-                                className="w-full h-14 gap-3 font-black text-sm tracking-widest bg-primary text-primary-foreground hover:opacity-90 shadow-[0_10px_20px_-10px_rgba(hsl(var(--primary)),0.5)] transition-all"
-                                disabled={isRunning}
-                            >
-                                {isRunning ? (
-                                    <Loader2 className="animate-spin" size={20}/>
-                                ) : (
-                                    <Zap size={20} className="fill-current"/>
-                                )}
-                                {isRunning ? "AGENT_EXECUTING_WORKFLOW..." : "KÍCH HOẠT QUY TRÌNH MAESTRO"}
-                            </Button>
-                        </fetcher.Form>
-                    </CardContent>
-                </Card>
-
-                {/* LOGS & RESULTS SECTION */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-10">
-                    {/* TRACE LOG */}
-                    <Card
-                        className="dark:bg-black border-border rounded-2xl overflow-hidden shadow-2xl">
-                        <div className="p-4 border-b border-white/5 bg-white/3 flex items-center justify-between">
-                            <div
-                                className="flex items-center gap-2 text-[10px] font-black text-emerald-500 uppercase tracking-tighter">
-                                <Terminal size={14}/> System_Trace_Log
-                            </div>
-                            <div
-                                className={`w-2 h-2 rounded-full ${isRunning ? "bg-emerald-500 animate-pulse" : "bg-zinc-700"}`}/>
-                        </div>
-                        <ScrollArea className="h-48 p-5 font-mono text-[10px] leading-relaxed">
-                            <div className="space-y-2">
-                                {isRunning ? (
-                                    <>
-                                        <p className="text-emerald-500/80">[{new Date().toLocaleTimeString()}] Maestro
-                                            Orchestrator initialized...</p>
-                                        <p className="text-emerald-500/60">[{new Date().toLocaleTimeString()}] Strategy:
-                                            Reasoning with ReAct Loop...</p>
-                                        <p className="text-emerald-500/40">[{new Date().toLocaleTimeString()}]
-                                            Searching: Multi-source Signal Extraction...</p>
-                                        <p className="text-blue-400 animate-pulse">[{new Date().toLocaleTimeString()}]
-                                            Thought: Identifying system architecture shifts...</p>
-                                    </>
-                                ) : result?.success ? (
-                                    <p className="text-blue-400 font-bold">[{new Date().toLocaleTimeString()}]
-                                        COMPLETED: Knowledge bóc tách thành công.</p>
-                                ) : result?.success === false ? (
-                                    <p className="text-destructive font-bold">[{new Date().toLocaleTimeString()}]
-                                        ERROR: {result.error}</p>
-                                ) : (
-                                    <p className="text-muted-foreground/30 italic">Awaiting strategic command...</p>
-                                )}
-                            </div>
-                        </ScrollArea>
-                    </Card>
-
-                    {/* STATUS / RESULT QUICK VIEW */}
-                    <Card
-                        className="bg-card border-border rounded-2xl p-6 flex flex-col justify-center items-center text-center shadow-xl">
-                        {result?.success && result.report ? (
-                            <div className="space-y-4 animate-in zoom-in-95 duration-500">
-                                <div
-                                    className="mx-auto w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-                                    <ShieldCheck size={32}/>
-                                </div>
-                                <div>
-                                    <h3 className="text-foreground font-black text-sm uppercase tracking-tight">Intelligence
-                                        Ready</h3>
-                                    <p className="text-[10px] text-muted-foreground mt-1 max-w-45 mx-auto italic">
-                                        Dữ liệu đã được phân luồng vào 4 trụ cột Dashboard.
-                                    </p>
-                                </div>
-                                <Button asChild variant="outline" size="sm"
-                                        className="font-black gap-2 border-primary/20 hover:bg-primary hover:text-primary-foreground transition-all">
-                                    <Link to={`/reports/${result.report.id}?view=trends`}>
-                                        XEM CHI TIẾT <ArrowRight size={14}/>
-                                    </Link>
-                                </Button>
-                            </div>
-                        ) : (
-                            <div className="opacity-20 flex flex-col items-center gap-4 py-6">
-                                <Info size={40} className="text-muted-foreground"/>
-                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">
-                                    {isRunning ? "PROCESSING_STREAM..." : "STANDBY_MODE"}
-                                </p>
-                            </div>
-                        )}
-                    </Card>
-                </div>
-            </div>
+      {/* ── HEADER ── */}
+      <div className="flex flex-col gap-3 pt-4">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-primary/10 border border-primary/20 rounded-2xl">
+            <Microscope className="w-6 h-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black tracking-tight text-foreground">Nghiên cứu Chuyên sâu</h1>
+            <p className="text-[13px] text-muted-foreground">AI Agent sẽ quét, tổng hợp và phân tích đa nguồn theo yêu cầu của bạn</p>
+          </div>
         </div>
-    )
+
+        {/* How it works */}
+        <div className="flex items-start gap-3 p-4 bg-secondary/30 rounded-xl border border-border/50 mt-2">
+          <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-[12px] font-semibold text-foreground">Cách hoạt động</p>
+            <p className="text-[12px] text-muted-foreground leading-relaxed">
+              Nhập chủ đề bất kỳ → AI Agent thu thập nội dung từ nhiều nguồn báo uy tín (TechCrunch, The Verge, CNBC...) → Phân tích chuyên sâu bằng ReAct Loop → Sinh báo cáo có dẫn chứng link gốc cụ thể → Lưu vào thư viện báo cáo.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── MAIN FORM ── */}
+      <div className="bg-background border border-border/60 rounded-2xl overflow-hidden shadow-sm">
+        <div className="px-6 py-4 border-b border-border/50 flex items-center gap-3">
+          <Zap className="w-4 h-4 text-primary" />
+          <h2 className="text-[13px] font-bold text-foreground uppercase tracking-wide">Chủ đề Nghiên cứu</h2>
+          <Badge variant="outline" className="text-[9px] font-mono ml-auto">ReAct Engine v1.5</Badge>
+        </div>
+
+        <fetcher.Form method="post" className="p-6 flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <textarea
+              name="topic"
+              required
+              disabled={isRunning}
+              rows={4}
+              className="w-full bg-muted/30 border border-border/60 rounded-xl px-4 py-3.5 text-sm text-foreground focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-none transition-all placeholder:text-muted-foreground/40 font-medium disabled:opacity-60 resize-none"
+              placeholder="Ví dụ: Phân tích sự dịch chuyển từ Microservices sang Monolith của các tập đoàn Tech năm 2025..."
+            />
+            <p className="text-[11px] text-muted-foreground/60">
+              Mô tả chi tiết chủ đề để AI phân tích chính xác hơn. Kết quả sẽ bao gồm link dẫn chứng từ nguồn gốc.
+            </p>
+          </div>
+
+          {/* Example topics */}
+          <div className="flex flex-col gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Gợi ý chủ đề</p>
+            <div className="flex flex-wrap gap-2">
+              {EXAMPLE_TOPICS.map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  disabled={isRunning}
+                  onClick={(e) => {
+                    const form = e.currentTarget.closest("form");
+                    const textarea = form?.querySelector("textarea[name='topic']") as HTMLTextAreaElement;
+                    if (textarea) textarea.value = t;
+                  }}
+                  className="text-[11px] px-3 py-1.5 rounded-full border border-border/60 bg-secondary/30 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors text-left disabled:opacity-50 cursor-pointer"
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Button
+            type="submit"
+            disabled={isRunning}
+            className="h-12 gap-3 font-bold text-sm tracking-wide"
+            size="lg"
+          >
+            {isRunning ? (
+              <><Loader2 className="animate-spin w-5 h-5" /> Đang kích hoạt AI Agent...</>
+            ) : (
+              <><Zap className="w-5 h-5" /> Kích hoạt Nghiên cứu Chuyên sâu</>
+            )}
+          </Button>
+        </fetcher.Form>
+      </div>
+
+      {/* ── RESULT / LOG PANEL ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Trace Log */}
+        <div className="bg-background border border-border/50 rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
+              <Terminal className="w-3.5 h-3.5" />
+              System Trace Log
+            </div>
+            <div className={`w-2 h-2 rounded-full ${isRunning ? "bg-emerald-500 animate-pulse" : result ? "bg-blue-500" : "bg-muted-foreground/30"}`} />
+          </div>
+          <div className="p-4 font-mono text-[11px] leading-relaxed h-48 overflow-y-auto space-y-1.5">
+            {isRunning ? (
+              <>
+                <p className="text-emerald-500">[{new Date().toLocaleTimeString()}] Maestro Orchestrator → initialized</p>
+                <p className="text-emerald-400">[{new Date().toLocaleTimeString()}] Stage 1: Scout — fetching RSS sources...</p>
+                <p className="text-emerald-300">[{new Date().toLocaleTimeString()}] Stage 2: Gatekeeper — filtering signals...</p>
+                <p className="text-blue-400 animate-pulse">[{new Date().toLocaleTimeString()}] Stage 3: DeepAnalysis — ReAct Loop running...</p>
+              </>
+            ) : result?.success ? (
+              <>
+                <p className="text-blue-400 font-bold">[{new Date().toLocaleTimeString()}] COMPLETED ✓</p>
+                <p className="text-muted-foreground">Topic: "{result.report.topic}"</p>
+                <p className="text-muted-foreground">Status: {result.report.status}</p>
+                <p className="text-emerald-400 mt-2">→ Báo cáo đang được lưu vào thư viện...</p>
+              </>
+            ) : result?.success === false ? (
+              <p className="text-destructive font-bold">[ERROR] {result.error}</p>
+            ) : (
+              <p className="text-muted-foreground/30 italic">Awaiting research command...</p>
+            )}
+          </div>
+        </div>
+
+        {/* Status Card */}
+        <div className="bg-background border border-border/50 rounded-2xl flex flex-col items-center justify-center p-8 text-center gap-4">
+          {result?.success ? (
+            <div className="space-y-4 animate-in zoom-in-95 duration-500">
+              <div className="mx-auto w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 flex items-center justify-center">
+                <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-foreground">Đang xử lý!</h3>
+                <p className="text-[12px] text-muted-foreground mt-1 max-w-48 mx-auto">
+                  AI Agent đang phân tích ngầm. Kết quả sẽ xuất hiện trong thư viện báo cáo.
+                </p>
+              </div>
+              <Button asChild variant="outline" size="sm" className="gap-2 font-medium">
+                <Link to="/reports">
+                  <BookOpen className="w-4 h-4" />
+                  Xem thư viện báo cáo
+                  <ArrowRight className="w-3 h-3" />
+                </Link>
+              </Button>
+            </div>
+          ) : result?.success === false ? (
+            <div className="opacity-80 flex flex-col items-center gap-3">
+              <AlertCircle className="w-10 h-10 text-destructive/60" />
+              <p className="text-sm font-medium text-destructive">Lỗi kết nối Agent</p>
+              <p className="text-[11px] text-muted-foreground">{result.error}</p>
+            </div>
+          ) : isRunning ? (
+            <div className="flex flex-col items-center gap-3">
+              <div className="relative w-16 h-16">
+                <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
+                <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+              </div>
+              <p className="text-[12px] font-medium text-muted-foreground uppercase tracking-wide animate-pulse">
+                AI đang phân tích...
+              </p>
+              <p className="text-[11px] text-muted-foreground/60">Quá trình này có thể mất 1-3 phút</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3 opacity-30">
+              <Clock className="w-10 h-10 text-muted-foreground" />
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">STANDBY</p>
+              <p className="text-[11px] text-muted-foreground">Chờ lệnh nghiên cứu...</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── PIPELINE INFO ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[
+          {
+            step: "01",
+            title: "Scout & Thu thập",
+            desc: "AI quét 25+ nguồn RSS, xác minh link sống, loại bỏ duplicate và link chết.",
+            icon: <Activity className="w-4 h-4 text-blue-500" />,
+          },
+          {
+            step: "02",
+            title: "Gatekeeper Filter",
+            desc: "Mô hình AI đọc tiêu đề & nội dung, chấm điểm tác động (0-10), phân loại theo whitelist topic.",
+            icon: <Zap className="w-4 h-4 text-amber-500" />,
+          },
+          {
+            step: "03",
+            title: "Deep Analysis + Dẫn chứng",
+            desc: "Jina Reader đọc toàn bộ bài gốc, ReAct Loop phân tích nhiều chiều, lưu kèm link nguồn xác minh.",
+            icon: <Microscope className="w-4 h-4 text-emerald-500" />,
+          },
+        ].map(({ step, title, desc, icon }) => (
+          <div key={step} className="flex gap-4 p-4 bg-background border border-border/50 rounded-xl">
+            <div className="flex flex-col items-center gap-2 shrink-0">
+              <div className="p-2 bg-muted rounded-lg">{icon}</div>
+              <div className="text-[10px] font-black text-muted-foreground/40">{step}</div>
+            </div>
+            <div>
+              <p className="text-[13px] font-bold text-foreground">{title}</p>
+              <p className="text-[12px] text-muted-foreground mt-1 leading-relaxed">{desc}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+    </div>
+  );
 }

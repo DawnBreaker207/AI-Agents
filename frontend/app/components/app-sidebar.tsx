@@ -1,78 +1,135 @@
-import {Link, useLocation} from "react-router";
+import { Link, useLocation, useMatches } from "react-router";
 import {
-    Sidebar,
-    SidebarContent,
-    SidebarFooter,
-    SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
-    SidebarHeader, SidebarMenu,
-    SidebarMenuButton, SidebarMenuItem
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
 } from "~/components/ui/sidebar";
-import {Cpu, Database, FilePieChart, LayoutDashboard, Rss, Settings, Terminal} from "lucide-react";
+import { 
+  Rss as RssIcon, 
+  FileText as FileTextIcon, 
+  FlaskConical as FlaskConicalIcon, 
+  Radio as RadioIcon, 
+  LayoutDashboard as LayoutDashboardIcon,
+  Radar as RadarIcon
+} from "lucide-react";
+import { ModeToggle } from "~/components/mode-toggle";
+import type { FeedMetrics } from "~/types";
 
-const items = [
-    {title: "Dashboard", url: "/", icon: LayoutDashboard},
-    {title: "Live Market Feed", url: "/feed", icon: Rss},
-    {title: "Insight Reports", url: "/reports", icon: FilePieChart},
-    {title: "Research Center", url: "/research", icon: Terminal},
-    {title: "Knowledge Sources", url: "/sources", icon: Database},
-]
+const MAIN_ITEMS = [
+  { to: "/dashboard", label: "Tổng quan thị trường", icon: LayoutDashboardIcon, badgeKey: null },
+  { to: "/feed",      label: "Live News Feed",       icon: RssIcon,             badgeKey: "keep_urgent" as const },
+  { to: "/reports",   label: "Báo cáo chiến lược",   icon: FileTextIcon,        badgeKey: "processed" as const   },
+  { to: "/research",  label: "Nghiên cứu chuyên sâu",icon: FlaskConicalIcon,    badgeKey: null                   },
+] as const;
+
+const CONFIG_ITEMS = [
+  { to: "/sources",   label: "Quản lý nguồn tin",    icon: RadioIcon,           badgeKey: null },
+] as const;
 
 export function AppSidebar() {
-    const location = useLocation();
+  const location = useLocation();
+  
+  // Safe extraction of metrics from parent layout loader using useMatches
+  const matches = useMatches();
+  const layoutMatch = matches.find((m) => m.data && typeof m.data === "object" && "metrics" in m.data);
+  const metrics = (layoutMatch?.data as { metrics: FeedMetrics })?.metrics || {
+    total_today: 0,
+    keep_urgent: 0,
+    keep: 0,
+    watch: 0,
+    trash: 0,
+    processed: 0,
+    last_run_at: null,
+  };
+
+  const renderMenuItem = (item: typeof MAIN_ITEMS[number] | typeof CONFIG_ITEMS[number]) => {
+    const isActive = location.pathname === item.to || location.pathname.startsWith(item.to + "/");
+    const count = item.badgeKey ? metrics[item.badgeKey] : 0;
+
     return (
-        <Sidebar collapsible="icon">
-            <SidebarHeader className="py-4">
-                <div className="flex items-center gap-3 px-2">
-                    <div className="bg-primary p-1.5 rounded-lg">
-                        <Cpu className="text-primary-foreground" size={20}/>
-                    </div>
-                    <span className="font-bold text-lg group-data-[collapsible=icon]:hidden">
-                        IT Agentic
-                    </span>
-                </div>
-            </SidebarHeader>
-            {/*    */}
-            <SidebarContent>
-                <SidebarGroup>
-                    <SidebarGroupLabel>Menu</SidebarGroupLabel>
-                    <SidebarGroupContent>
-                        <SidebarMenu>
-                            {items.map((item) => (
-                                <SidebarMenuItem key={item.title}>
-                                    <SidebarMenuButton
-                                        asChild
-                                        isActive={location.pathname === item.url}
-                                        tooltip={item.title}
-                                    >
-                                        <Link to={item.url}>
-                                            <item.icon/>
-                                            <span>{item.title}</span>
-                                        </Link>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                            ))}
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup>
-            </SidebarContent>
-            {/*    */}
-            <SidebarFooter className="p-4">
-                <div className="bg-muted/50 rounded-lg p-3 group-data-[collapsible=icon]:hidden">
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-bold uppercase opacity-50">Agent Status</span>
-                        <span className="relative flex h-2 w-2">
-                <span
-                    className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-             </span>
-                    </div>
-                    <p className="text-xs font-medium text-foreground">AI is Scanning...</p>
-                </div>
-                <SidebarMenuButton size="lg">
-                    <Settings/>
-                    <span>Settings</span>
-                </SidebarMenuButton>
-            </SidebarFooter>
-        </Sidebar>
-    )
+      <SidebarMenuItem key={item.to}>
+        <SidebarMenuButton
+          asChild
+          className="w-full"
+        >
+          <Link
+            to={item.to}
+            className={`text-[13px] rounded-md px-2 py-1.5 w-full flex items-center gap-2 transition-colors ${
+              isActive
+                ? "bg-secondary text-foreground font-medium"
+                : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+            }`}
+          >
+            <item.icon className="w-4 h-4 shrink-0" />
+            <span>{item.label}</span>
+            {count > 0 && item.badgeKey === "keep_urgent" && (
+              <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300">
+                {count}
+              </span>
+            )}
+            {count > 0 && item.badgeKey === "processed" && (
+              <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                {count}
+              </span>
+            )}
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  };
+
+  return (
+    <Sidebar className="w-[200px] border-r border-border/50 shrink-0 bg-background h-full flex flex-col justify-between" collapsible="none">
+      {/* Header */}
+      <SidebarHeader className="p-0 shrink-0">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border/50">
+          <div className="w-[22px] h-[22px] rounded-[5px] bg-foreground flex items-center justify-center">
+            <RadarIcon className="w-3 h-3 text-background" />
+          </div>
+          <span className="text-[13px] font-medium text-foreground tracking-tight">
+            Tech<span className="text-muted-foreground font-normal">Scout</span>
+          </span>
+        </div>
+      </SidebarHeader>
+
+      {/* Content */}
+      <SidebarContent className="p-2 flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-4">
+          
+          {/* Main items */}
+          <div className="flex flex-col">
+            <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest px-2 pt-3 pb-1">
+              Main
+            </p>
+            <SidebarMenu>
+              {MAIN_ITEMS.map(renderMenuItem)}
+            </SidebarMenu>
+          </div>
+
+          {/* Config items */}
+          <div className="flex flex-col">
+            <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest px-2 pt-3 pb-1">
+              Config
+            </p>
+            <SidebarMenu>
+              {CONFIG_ITEMS.map(renderMenuItem)}
+            </SidebarMenu>
+          </div>
+
+        </div>
+      </SidebarContent>
+
+      {/* Footer */}
+      <SidebarFooter className="border-t border-border/50 p-2 shrink-0 flex items-center justify-between">
+        <div className="flex items-center gap-2 w-full justify-between">
+          <span className="text-[11px] text-muted-foreground/50 font-medium pl-2">v1.5</span>
+          <ModeToggle />
+        </div>
+      </SidebarFooter>
+    </Sidebar>
+  );
 }

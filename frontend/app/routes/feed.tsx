@@ -1,122 +1,248 @@
-import {Activity, ArrowRight, ShieldCheck, Zap} from "lucide-react";
-import {Button} from "~/components/ui/button";
-import {ScrollArea} from "~/components/ui/scroll-area";
-import {Card, CardContent} from "~/components/ui/card";
-import {Badge} from "~/components/ui/badge";
-import {agentApi} from "~/lib/api";
-import {Link, useLoaderData} from "react-router";
-import {getSentimentColor} from "~/components/agent-trace";
-import {Separator} from "~/components/ui/separator";
+import type { Route } from "./+types/feed";
+import { Link, useRevalidator } from "react-router";
+import { useState, useEffect } from "react";
+import { getNewsByStatus, getFeedMetrics, triggerPipeline } from "~/lib/api";
+import { NewsCard } from "~/components/news-card";
+import { cn, relativeTime } from "~/lib/utils";
+import { Rss as RssIcon, Clock as ClockIcon, LayoutGrid, RefreshCcw } from "lucide-react";
 
-export async function loader() {
-    const streams = await agentApi.getSignals();
-    return {marketSignals: [...streams.jobs]};
+export const meta: Route.MetaFunction = () => {
+  return [
+    { title: "Live News Feed - TechScout Control Center" },
+    { name: "description", content: "Live News Feed monitored, analyzed, and filtered by TechScout AI Gatekeeper." }
+  ];
+};
+
+export async function loader({ request }: Route.LoaderArgs) {
+  const url = new URL(request.url);
+  const tab = url.searchParams.get("tab") ?? "KEEP_URGENT";
+  const page = Number(url.searchParams.get("page") ?? 1);
+
+  try {
+    const [metrics, rawNews] = await Promise.all([
+      getFeedMetrics(),
+      getNewsByStatus(tab, page)
+    ]);
+    // CHUẨN HOÁ: Bất kể phần nào không có link gốc thì không được hiện lên trang feed
+    const news = rawNews.filter(n => n.url && n.url.trim() !== "");
+    return { tab, page, news, metrics };
+  } catch (err) {
+    console.error("Feed loader failed, returning empty state:", err);
+    return {
+      tab,
+      page,
+      news: [],
+      metrics: {
+        total_today: 0,
+        keep_urgent: 0,
+        keep: 0,
+        watch: 0,
+        trash: 0,
+        processed: 0,
+        last_run_at: null
+      }
+    };
+  }
 }
 
+export default function Feed({ loaderData }: Route.ComponentProps) {
+  const { tab, page, news, metrics } = loaderData;
+  const [isTriggering, setIsTriggering] = useState(false);
+  const { revalidate, state } = useRevalidator();
 
-export default function MarketFeed() {
-    const {marketSignals} = useLoaderData<{ marketSignals: any[] }>();
+  // 1. SSE Realtime Connection
+  useEffect(() => {
+    const sse = new EventSource("http://localhost:8888/api/news/stream");
+    sse.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "new_news" && state === "idle") {
+          revalidate(); // Tự động cập nhật data khi có tin mới
+        }
+      } catch (e) {}
+    };
+    return () => sse.close();
+  }, [state, revalidate]);
 
-    return (
-        <div className="p-6 space-y-6 bg-background min-h-screen animate-in fade-in duration-700">
-            {/* --- HEADER: COMMAND CENTER STYLE --- */}
-            <div
-                className="flex justify-between items-center bg-zinc-950 text-white p-8 rounded-[2rem] shadow-2xl border border-white/5 relative overflow-hidden">
-                <div
-                    className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(79,70,229,0.15),transparent)]"/>
-                <div className="relative z-10">
-                    <h2 className="text-3xl font-black flex items-center gap-3 italic tracking-tighter uppercase">
-                        <Activity className="text-rose-500 animate-pulse" size={32}/>
-                        Live Market Monitor
-                    </h2>
-                    <p className="text-slate-500 text-[10px] mt-2 font-mono uppercase tracking-[0.4em]">
-                        Autonomous_Signal_Extraction_v3.1
-                    </p>
-                </div>
-                <div className="text-right relative z-10 space-y-2 hidden md:block">
-                    <Badge variant="outline"
-                           className="text-emerald-400 border-emerald-400/30 bg-emerald-400/5 font-mono px-4">
-                        NODES: ONLINE
-                    </Badge>
-                    <p className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">
-                        Refresh: {new Date().toLocaleTimeString()}
-                    </p>
-                </div>
-            </div>
+  const handleTrigger = async () => {
+    setIsTriggering(true);
+    try {
+      await triggerPipeline();
+      alert("Đã kích hoạt quét tin tức thủ công. Hệ thống đang thu thập và phân tích nền!");
+      revalidate();
+    } catch (e) {
+      alert("Lỗi kích hoạt pipeline.");
+    } finally {
+      setIsTriggering(false);
+    }
+  };
 
-            {/* --- FEED STREAM --- */}
-            <ScrollArea className="h-[calc(100vh-280px)] pr-4">
-                <div className="grid gap-6 max-w-5xl mx-auto">
-                    {marketSignals.length > 0 ? marketSignals.map((item) => (
-                        <Card
-                            key={item.id}
-                            className={`group transition-all duration-500 border-l-4 hover:translate-x-1 overflow-hidden min-w-0 ${getSentimentColor(item.badge === "Tuyển dụng" ? "Trung tính" : item.badge)}`}
-                        >
-                            <CardContent className="p-6 space-y-6 min-w-0">
-                                {/* TOP ROW: Badge & Impact */}
-                                <div className="flex justify-between items-start gap-4">
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex flex-col">
-                                            <span
-                                                className="text-[10px] font-black uppercase text-muted-foreground opacity-50 mb-1 tracking-widest">Type</span>
-                                            <Badge variant={item.type === "jobs" ? "default" : "secondary"}
-                                                   className="font-black uppercase text-[9px] px-2 py-0 h-5">
-                                                {item.badge}
-                                            </Badge>
-                                        </div>
-                                        <Separator orientation="vertical" className="h-8 bg-border/50"/>
-                                        <div className="flex flex-col">
-                                            <span
-                                                className="text-[10px] font-black uppercase text-muted-foreground opacity-50 tracking-widest mb-1">Time</span>
-                                            <span className="text-[10px] font-mono font-bold">
-                                                {new Date(item.time).toLocaleTimeString()}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <span
-                                            className="text-[10px] font-black text-rose-500 font-mono tracking-widest uppercase block mb-1 opacity-50">Impact</span>
-                                        <span className="text-xl font-black tabular-nums">{item.impact || 0}</span>
-                                    </div>
-                                </div>
+  const TABS_MAP = [
+    { id: "KEEP_URGENT", label: "🔥 Tin Nóng Đầu Tư / Quan Trọng", count: metrics.keep_urgent },
+    { id: "KEEP",        label: "📰 Tin Tức Đã Lọc", count: metrics.keep },
+    { id: "WATCH",       label: "👀 Đang Theo Dõi (Watch)", count: metrics.watch },
+    { id: "PENDING",     label: "⏳ Chờ AI Phân Tích", count: metrics.total_today - metrics.processed },
+  ] as const;
 
-                                {/* CONTENT ROW: XỬ LÝ TEXT DÀI ĐỂ KHÔNG VỠ KHUNG */}
-                                <div className="space-y-4 w-full min-w-0">
-                                    <h4 className={`font-black tracking-tight leading-tight italic group-hover:text-primary transition-colors wrap-break-word whitespace-normal w-full
-                                        ${item.type === "jobs" ? 'text-lg md:text-xl text-emerald-600 dark:text-emerald-400' : 'text-xl md:text-2xl'}`}>
-                                        {item.title}
-                                    </h4>
-
-                                    {/* Summary text */}
-                                    <p className="text-sm md:text-base text-muted-foreground leading-relaxed font-medium opacity-80 wrap-break-word whitespace-normal border-l-2 pl-4 border-muted">
-                                        {item.content}
-                                    </p>
-                                </div>
-
-                                {/* ACTION ROW */}
-                                <div className="flex justify-between items-center pt-4 border-t border-border/40">
-                                    <div className="flex items-center gap-2 opacity-40">
-                                        <ShieldCheck size={14} className="text-primary"/>
-                                        <span
-                                            className="text-[9px] font-black uppercase tracking-widest">Autonomous_Verified</span>
-                                    </div>
-                                    <Button variant="default" size="sm" asChild
-                                            className="text-[10px] font-black uppercase tracking-widest gap-2 shadow-lg shadow-primary/20 rounded-full px-5">
-                                        <Link to={`/reports/${item.id}?view=${item.type}`}>
-                                            Bóc tách chuyên sâu <ArrowRight size={14}/>
-                                        </Link>
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )) : (
-                        <div className="py-32 text-center flex flex-col items-center gap-4 opacity-20">
-                            <Zap size={64} className="animate-pulse"/>
-                            <p className="font-black uppercase tracking-[0.5em] text-sm">Awaiting_Signals...</p>
-                        </div>
-                    )}
-                </div>
-            </ScrollArea>
+  return (
+    <div className="flex flex-col gap-8 animate-in fade-in duration-500 max-w-7xl mx-auto pb-16">
+      
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+        <div className="space-y-0.5">
+          <h1 id="page-title" className="text-lg font-medium text-foreground tracking-tight flex items-center gap-2">
+            <RssIcon className="w-4 h-4 text-muted-foreground" />
+            Live Feed
+          </h1>
+          <p className="text-[12px] text-muted-foreground leading-relaxed">
+            Luồng tin tức công nghệ thời gian thực được rà quét và phân loại tự động.
+          </p>
         </div>
-    )
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="flex items-center gap-1.5 text-[11px] border border-border/50 rounded-full px-2.5 py-1 text-muted-foreground bg-secondary/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            Pipeline đang hoạt động
+          </span>
+
+          <span className="flex items-center gap-1 text-[11px] border border-border/50 rounded-full px-2.5 py-1 text-muted-foreground bg-secondary/20">
+            <ClockIcon className="w-3 h-3" />
+            Cập nhật {relativeTime(metrics.last_run_at ?? new Date().toISOString())}
+          </span>
+          
+          <button 
+            onClick={handleTrigger}
+            disabled={isTriggering}
+            className="flex items-center gap-1.5 text-[11px] border border-border/50 rounded-full px-2.5 py-1 text-foreground bg-background hover:bg-secondary/60 disabled:opacity-50 transition-colors cursor-pointer"
+          >
+            <RefreshCcw className={cn("w-3 h-3", isTriggering && "animate-spin")} />
+            {isTriggering ? "Đang quét..." : "Lấy tin ngay"}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+        <div className="bg-background border border-border/50 rounded-lg px-3.5 py-3 flex flex-col justify-between">
+          <div>
+            <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest mb-1">Tin thu thập hôm nay</p>
+            <p className="text-3xl font-black text-foreground leading-none tabular-nums">
+              {metrics.total_today}
+            </p>
+          </div>
+          <p className="text-[11px] text-muted-foreground/60 mt-1.5">bài đã xử lý</p>
+        </div>
+
+        <div className="bg-background border border-border/50 rounded-lg px-3.5 py-3 flex flex-col justify-between">
+          <div>
+            <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest mb-1 text-destructive">Tín hiệu Quan trọng</p>
+            <p className="text-3xl font-black text-destructive leading-none tabular-nums">
+              {metrics.keep_urgent}
+            </p>
+          </div>
+          <p className="text-[11px] text-muted-foreground/60 mt-1.5">cần đọc ngay</p>
+        </div>
+
+        <div className="bg-background border border-border/50 rounded-lg px-3.5 py-3 flex flex-col justify-between">
+          <div>
+            <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest mb-1 text-green-600 dark:text-green-400">Tin tức Chất lượng</p>
+            <p className="text-3xl font-black text-green-600 dark:text-green-400 leading-none tabular-nums">
+              {metrics.keep}
+            </p>
+          </div>
+          <p className="text-[11px] text-muted-foreground/60 mt-1.5">trong hàng đợi</p>
+        </div>
+
+        <div className="bg-background border border-border/50 rounded-lg px-3.5 py-3 flex flex-col justify-between">
+          <div>
+            <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest mb-1 text-amber-600 dark:text-amber-400">Tin Bình Thường (Watch)</p>
+            <p className="text-3xl font-black text-amber-600 dark:text-amber-400 leading-none tabular-nums">
+              {metrics.watch}
+            </p>
+          </div>
+          <p className="text-[11px] text-muted-foreground/60 mt-1.5">đang theo dõi</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1.5 border-b border-border/50 mt-1 overflow-x-auto pb-px">
+        {TABS_MAP.map((t) => (
+          <Link
+            key={t.id}
+            to={`?tab=${t.id}&page=1`}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 text-[13px] border-b-2 -mb-[2px] transition-all whitespace-nowrap rounded-t-lg",
+              tab === t.id
+                ? "border-primary text-primary font-bold bg-primary/5"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/40"
+            )}
+          >
+            {t.label}
+            <span className={cn(
+              "text-[10px] px-2 py-0.5 rounded-full transition-colors font-mono",
+              tab === t.id
+                ? "bg-primary text-primary-foreground"
+                : "bg-secondary text-muted-foreground"
+            )}>
+              {t.count}
+            </span>
+          </Link>
+        ))}
+      </div>
+
+      {/* ── NEWS LIST (GRID/MASONRY LAYOUT) ── */}
+      <div className={cn(
+        "grid gap-4",
+        tab === "KEEP_URGENT" ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+      )}>
+        {news.map((item, idx) => (
+          <NewsCard 
+            key={item.id} 
+            news={item} 
+            showPromote={false} 
+            queuePos={(tab === "KEEP") ? (page - 1) * 20 + idx + 1 : undefined} 
+          />
+        ))}
+
+        {news.length === 0 && (
+          <div className="col-span-full py-24 text-center flex flex-col items-center gap-4 border border-dashed border-border/60 rounded-xl bg-card/20 backdrop-blur-sm">
+            <div className="p-4 bg-secondary/30 rounded-full">
+              <LayoutGrid className="w-8 h-8 text-muted-foreground/50 animate-pulse" />
+            </div>
+            <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
+              Không có tin tức thị trường nào ở danh mục này
+            </p>
+            <p className="text-[12px] text-muted-foreground/60 italic max-w-sm leading-relaxed">
+              Các nguồn dữ liệu đang được AI Agent quét liên tục. Kết quả mới nhất sẽ tự động hiện lên đây (Real-time).
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ── PAGINATION (Antes / Next) ── */}
+      {news.length > 0 && (
+        <div className="flex items-center justify-between pt-4 border-t border-border/50">
+          <Link
+            to={`/feed?tab=${tab}&page=${page > 1 ? page - 1 : 1}`}
+            className={cn(
+              "px-3 py-1.5 rounded text-[13px] font-medium transition-colors border border-border/50 bg-background text-foreground hover:bg-secondary/60",
+              page <= 1 && "pointer-events-none opacity-40 bg-muted"
+            )}
+          >
+            Trước
+          </Link>
+          <span className="text-[11px] font-mono text-muted-foreground font-medium">
+            Trang {page}
+          </span>
+          <Link
+            to={`/feed?tab=${tab}&page=${page + 1}`}
+            className={cn(
+              "px-3 py-1.5 rounded text-[13px] font-medium transition-colors border border-border/50 bg-background text-foreground hover:bg-secondary/60",
+              news.length < 20 && "pointer-events-none opacity-40 bg-muted"
+            )}
+          >
+            Tiếp
+          </Link>
+        </div>
+      )}
+
+    </div>
+  );
 }

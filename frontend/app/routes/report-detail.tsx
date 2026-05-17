@@ -1,198 +1,164 @@
-import type {Route} from "./+types/report-detail";
-import {Link, useLoaderData, useSearchParams} from "react-router";
-import {Button} from "~/components/ui/button";
-import {agentApi} from "~/lib/api";
-import {Activity, Briefcase, Calendar, ChevronLeft, Cpu, ExternalLink, Microscope, ShieldCheck} from "lucide-react";
-import {Badge} from "~/components/ui/badge";
-import {Separator} from "~/components/ui/separator";
-import remarkGfm from "remark-gfm";
+import type { Route } from "./+types/report-detail";
+import { getReportById } from "~/lib/api";
+import { Link } from "react-router";
+import { Badge } from "~/components/ui/badge";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { relativeTime } from "~/lib/utils";
+import { ImpactBar } from "~/components/impact-bar";
+import { ArrowLeft as ArrowLeftIcon, Globe as GlobeIcon, ExternalLink as ExternalLinkIcon } from "lucide-react";
+import { cn } from "~/lib/utils";
 
-export async function loader({params}: Route.LoaderArgs) {
-    const report = await agentApi.getReportById(params.id);
-    if (!report) throw new Response("Not Found", {status: 404});
-    return {report};
+export const meta: Route.MetaFunction = ({ data }) => {
+  const reportTitle = data?.report?.title || "Báo cáo chi tiết";
+  return [
+    { title: `${reportTitle} - TechScout Báo cáo` },
+    { name: "description", content: `Báo cáo chiến lược chuyên sâu về công nghệ và tác động thị trường.` }
+  ];
+};
+
+export async function loader({ params }: Route.LoaderArgs) {
+  const report = await getReportById(Number(params.id));
+  return { report };
 }
 
-export default function ReportDetail() {
-    const {report} = useLoaderData<typeof loader>();
-    const [searchParams] = useSearchParams();
-    const view = searchParams.get("view") || "news"; // Lấy type từ URL
+const SENTIMENT_STYLES: Record<string, string> = {
+  POSITIVE: "text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800/30",
+  NEUTRAL:  "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/30",
+  NEGATIVE: "text-destructive bg-destructive/10 border-destructive/20",
+  "Tích cực": "text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800/30",
+  "Trung tính":  "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/30",
+  "Tiêu cực": "text-destructive bg-destructive/10 border-destructive/20",
+};
 
-    return (
-        <div className="min-h-screen bg-background text-foreground pb-20 overflow-x-hidden">
-            {/* STICKY HEADER CHO TRANG CHI TIẾT */}
-            <div className="sticky top-0 z-50 w-full bg-background/80 backdrop-blur-md border-b">
-                <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-                    <Button variant="ghost" asChild size="sm" className="gap-2 text-muted-foreground">
-                        <Link to="/"><ChevronLeft size={16}/> Trở lại Dashboard</Link>
-                    </Button>
-                    <div className="flex items-center gap-3">
-                        <Badge variant="outline" className="font-mono text-[10px]">{report.id}</Badge>
-                        <Badge className="bg-primary text-[10px] uppercase tracking-tighter">Verified by Maestro</Badge>
-                    </div>
-                </div>
-            </div>
+const CATEGORY_STYLES: Record<string, string> = {
+  AI_RESEARCH: "bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300",
+  LAYOFF:      "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
+  VN_MARKET:   "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
+  DEV_TOOLS:   "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  SECURITY:    "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
+  BUSINESS:    "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  OTHER:       "bg-muted text-muted-foreground",
+};
 
-            <article className="max-w-4xl mx-auto px-6 pt-12 space-y-10">
-                {/* TIÊU ĐỀ BÁO CÁO */}
-                <header className="space-y-6">
-                    <div className="space-y-2">
-                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">
-                            Strategic_Intelligence_Protocol
-                        </p>
-                        <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-tight italic wrap-break-word">
-                            {report.title}
-                        </h1>
-                    </div>
+export default function ReportDetail({ loaderData }: Route.ComponentProps) {
+  const { report } = loaderData;
 
-                    <div
-                        className="flex flex-wrap gap-6 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-y py-4">
-                        <div className="flex items-center gap-2"><Calendar
-                            size={14}/> {new Date(report.created_at).toLocaleDateString()}</div>
-                        <div className="flex items-center gap-2"><Activity size={14}/> Impact: {report.impact_score}/10
-                        </div>
-                        <div className="flex items-center gap-2"><ShieldCheck size={14}/> Sắc thái: {report.sentiment}
-                        </div>
-                    </div>
-                </header>
+  const rawCategory = report.categories?.[0] || report.tags?.[0] || "OTHER";
+  const categoryKey = rawCategory in CATEGORY_STYLES ? rawCategory : "OTHER";
+  const categoryStyle = CATEGORY_STYLES[categoryKey];
 
-                {/* NỘI DUNG CHI TIẾT THEO TỪNG MỤC */}
-                <div className="relative overflow-hidden rounded-[2.5rem] border bg-card shadow-2xl p-8 md:p-12">
-                    <div
-                        className="absolute inset-0 bg-[radial-gradient(#80808012_1px,transparent_1px)] bg-size-[20px_20px] pointer-events-none"/>
+  return (
+    <div className="max-w-5xl mx-auto flex flex-col gap-8 animate-in fade-in duration-300 pb-16">
+      
+      {/* Back button */}
+      <Link to="/reports" className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground w-fit transition-colors">
+        <ArrowLeftIcon className="w-3.5 h-3.5" />
+        Quay lại báo cáo
+      </Link>
 
-                    <div className="relative z-10">
-                        {(view === "news" || view === "pulse") && (
-                            <div className="space-y-8">
-                                <Badge
-                                    className="bg-blue-600 px-4 py-1 text-[10px] font-black uppercase tracking-widest">
-                                    Market Analysis Data
-                                </Badge>
-                                <div className="prose prose-slate dark:prose-invert lg:prose-xl max-w-none
-                                    prose-headings:font-black prose-headings:tracking-tighter prose-headings:italic
-                                    prose-h3:text-primary prose-h3:mt-10 prose-h3:mb-4
-                                    prose-p:leading-relaxed prose-p:text-muted-foreground prose-p:mb-6
-                                    wrap-break-word overflow-hidden">
-                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                        {report.summary}
-                                    </ReactMarkdown>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 2. VIEW TECH TRENDS */}
-                        {view === "trends" && (
-                            <div className="space-y-10">
-                                <div
-                                    className="flex items-center gap-3 text-indigo-500 font-black uppercase text-xs tracking-widest">
-                                    <Cpu size={24}/> Tech Stack Evolution
-                                </div>
-                                <div className="grid gap-6">
-                                    {report.tech_trends.map((t: any, i: number) => (
-                                        <div key={i}
-                                             className="group p-8 rounded-3xl bg-muted/40 border hover:border-primary/50 transition-all">
-                                            <h3 className="font-black text-xl text-primary mb-4 italic tracking-tight"># {t.name}</h3>
-                                            <div
-                                                className="prose dark:prose-invert max-w-none text-muted-foreground leading-loose">
-                                                <ReactMarkdown>{t.update}</ReactMarkdown>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 3. VIEW EMPLOYMENT (JOB) */}
-                        {view === "jobs" && (
-                            <div className="space-y-12 w-full max-w-full">
-                                <div
-                                    className="flex items-center gap-3 text-emerald-500 font-black uppercase text-xs tracking-widest">
-                                    <Briefcase size={24}/> 03. Lao động & Mức lương
-                                </div>
-                                <div
-                                    className="bg-primary p-8 md:p-12 rounded-[3rem] text-primary-foreground shadow-2xl relative overflow-hidden w-full">
-                                    <div
-                                        className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 blur-[80px]"/>
-
-                                    <div className="relative z-10 space-y-8 w-full">
-                                        <div className="space-y-4 w-full">
-                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-50">Global_Comp_Benchmark</p>
-                                            <h2 className="text-xl md:text-3xl font-black tracking-tight leading-[1.3] break-words whitespace-pre-line w-full">
-                                                {report.job_details.salary}
-                                            </h2>
-                                        </div>
-
-                                        <div className="h-[1px] w-full bg-white/10"/>
-
-                                        <div className="space-y-4 w-full">
-                                            <p className="text-[10px] font-black uppercase tracking-widest opacity-50">Market_Intelligence_Analysis</p>
-                                            <p className="text-lg md:text-xl font-medium italic leading-relaxed border-l-4 border-white/20 pl-6 break-words whitespace-normal w-full opacity-90">
-                                                "{report.employment_status.market}"
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="space-y-6 w-full">
-                                    <p className="text-[10px] font-black uppercase tracking-widest opacity-40 italic">Essential_Skillset_Matrix</p>
-                                    <div className="flex flex-col gap-4 w-full">
-                                        {report.job_details.skills.map((s, index) => (
-                                            <div
-                                                key={index}
-                                                className="group flex gap-6 p-6 bg-muted/20 border border-border rounded-2xl shadow-sm hover:border-primary/40 transition-all w-full"
-                                            >
-                                                <span className="text-xs font-black opacity-20 mt-1 shrink-0 font-mono">
-                                                    SKILL_0{index + 1}
-                                                </span>
-                                                <p className="text-sm md:text-base font-bold text-foreground leading-relaxed break-words whitespace-normal w-full">
-                                                    {s}
-                                                </p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 4. VIEW ACADEMIC */}
-                        {view === "academic" && (
-                            <div className="space-y-8">
-                                <div
-                                    className="flex items-center gap-3 text-orange-500 font-black uppercase text-xs tracking-widest">
-                                    <Microscope size={24}/> Evidence Grounds
-                                </div>
-                                <div className="grid gap-4">
-                                    {report.research_articles.map((art: any, i: number) => (
-                                        <a key={i} href={art.url} target="_blank" rel="noreferrer"
-                                           className="flex items-center justify-between p-8 border rounded-[2rem] bg-muted/20 hover:bg-primary hover:text-primary-foreground transition-all group group shadow-lg">
-                                            <div className="space-y-1 pr-4">
-                                                <div
-                                                    className="text-[10px] font-black opacity-40 uppercase tracking-widest">Reference_0{i + 1}</div>
-                                                <span
-                                                    className="font-bold text-lg leading-tight block">{art.title}</span>
-                                            </div>
-                                            <ExternalLink size={24}
-                                                          className="shrink-0 opacity-40 group-hover:opacity-100"/>
-                                        </a>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <footer className="pt-10 border-t border-dashed space-y-6">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Data_Verified_Sources</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {report.sources.map((url, i) => (
-                            <a key={i} href={url} target="_blank"
-                               className="text-xs font-mono text-primary hover:underline truncate bg-muted/50 p-3 rounded-xl border border-transparent hover:border-primary/20 transition-all">
-                                [{i + 1}] {url}
-                            </a>
-                        ))}
-                    </div>
-                </footer>
-            </article>
+      {/* Header */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className={cn("text-[10px] font-medium px-2 py-0 border-none rounded-full", categoryStyle)}>
+            {rawCategory.replace("_", " ")}
+          </Badge>
+          <Badge variant="outline" className={cn("text-[10px] font-medium px-2 py-0 rounded-full", SENTIMENT_STYLES[report.sentiment] || "bg-muted text-muted-foreground")}>
+            {report.sentiment}
+          </Badge>
         </div>
-    );
+
+        <h1 className="text-2xl md:text-3xl font-black text-foreground leading-tight">{report.title}</h1>
+
+        {report.original_source && (
+          <a 
+            href={report.original_source} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="inline-flex items-center gap-2 px-4 py-2 mt-2 bg-secondary/40 hover:bg-secondary text-secondary-foreground text-sm font-medium rounded-lg transition-colors w-fit border border-border/50 shadow-sm"
+          >
+            <GlobeIcon className="w-4 h-4 text-primary" />
+            Đọc bài báo gốc nguyên bản
+            <ExternalLinkIcon className="w-3.5 h-3.5 opacity-50" />
+          </a>
+        )}
+
+        <div className="flex items-center gap-3">
+          <ImpactBar score={report.impact_score} status="PROCESSED" />
+          <span className="text-muted-foreground/30">|</span>
+          <span className="text-[11px] text-muted-foreground/60 tabular-nums">{relativeTime(report.created_at)}</span>
+        </div>
+      </div>
+
+      {/* Sections — mỗi section có label nhỏ + content */}
+      {[
+        { label: "Tóm tắt điều hành",       content: report.executive_summary || report.summary },
+        { label: "Phân tích kỹ thuật chuyên sâu",       content: report.technical_deep_dive },
+        { label: "Tác động thị trường Việt Nam", content: report.vietnam_market_impact },
+      ].map(({ label, content }) =>
+        content ? (
+          <div key={label} className="flex flex-col gap-2">
+            <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">{label}</p>
+            <div className="border border-border/50 rounded-lg px-4 py-3.5 bg-background">
+              {label === "Phân tích kỹ thuật chuyên sâu" ? (
+                <div className="prose prose-sm dark:prose-invert max-w-none text-sm text-foreground leading-7">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {content}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <p className="text-sm text-foreground leading-7">{content}</p>
+              )}
+            </div>
+          </div>
+        ) : null
+      )}
+
+      {/* Action items */}
+      {report.strategic_action_items && report.strategic_action_items.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">Hành động chiến lược</p>
+          <div className="border border-border/50 rounded-lg divide-y divide-border/50 bg-background">
+            {report.strategic_action_items.map((item, i) => (
+              <div key={i} className="flex items-start gap-3 px-4 py-3">
+                <span className="text-[11px] text-muted-foreground/40 tabular-nums mt-0.5">{String(i + 1).padStart(2, "0")}</span>
+                <p className="text-[13px] text-foreground leading-relaxed">{item}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Citations / Links */}
+      {report.source_citations && report.source_citations.length > 0 && (
+        <div className="flex flex-col gap-2 mt-4 pt-6 border-t border-border/50">
+          <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">
+            Nguồn gốc & Dẫn chứng (Đã xác minh)
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {report.source_citations.map((citation: string, idx: number) => (
+              <a 
+                key={idx}
+                href={citation} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 border border-border/50 rounded-xl bg-card/40 hover:bg-secondary/40 transition-colors group shadow-sm"
+              >
+                <div className="p-2 bg-background rounded-lg shadow-sm border border-border/50 group-hover:scale-105 transition-transform">
+                  <GlobeIcon className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-0.5">Nguồn tham khảo {idx + 1}</p>
+                  <p className="text-[13px] font-medium text-foreground group-hover:text-primary transition-colors truncate">
+                    {citation.replace(/^https?:\/\//, '').replace(/^www\./, '')}
+                  </p>
+                </div>
+                <ExternalLinkIcon className="w-4 h-4 text-muted-foreground shrink-0 opacity-40 group-hover:opacity-100 transition-opacity" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+      
+    </div>
+  );
 }

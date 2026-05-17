@@ -1,84 +1,83 @@
-import type {ReactNode} from "react";
-import {Outlet, useLocation} from "react-router";
-import {SidebarInset, SidebarProvider, SidebarTrigger} from "~/components/ui/sidebar";
-import {AppSidebar} from "~/components/app-sidebar";
-import {Separator} from "~/components/ui/separator";
-import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator
-} from "~/components/ui/breadcrumb";
-import {Bell, Search} from "lucide-react";
-import {Input} from "~/components/ui/input";
-import {Avatar, AvatarFallback, AvatarImage} from "~/components/ui/avatar";
-import {TooltipProvider} from "~/components/ui/tooltip";
-import {ModeToggle} from "~/components/mode-toggle";
+import { Outlet, useLocation } from "react-router";
+import { SidebarProvider } from "~/components/ui/sidebar";
+import { AppSidebar } from "~/components/app-sidebar";
+import { ModeToggle } from "~/components/mode-toggle";
+import { ChevronRight as ChevronRightIcon, Clock as ClockIcon } from "lucide-react";
+import { getFeedMetrics } from "~/lib/api";
+import { relativeTime } from "~/lib/utils";
+import type { Route } from "./+types/DashboardLayout";
 
+export async function loader({ request }: Route.LoaderArgs) {
+  try {
+    const metrics = await getFeedMetrics();
+    return { metrics };
+  } catch (err) {
+    console.error("DashboardLayout loader failed, returning fallback metrics:", err);
+    return {
+      metrics: {
+        total_today: 0,
+        keep_urgent: 0,
+        keep: 0,
+        watch: 0,
+        trash: 0,
+        processed: 0,
+        last_run_at: null,
+      }
+    };
+  }
+}
 
-export function DashboardLayout() {
-    const location = useLocation();
-    const pathname = location.pathname.split("/").pop();
+export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
+  const { metrics } = loaderData;
+  const location = useLocation();
+  
+  // Format current page label from pathname
+  const pathParts = location.pathname.split("/").filter(Boolean);
+  const pageLabel = pathParts[0] === "feed" ? "Live Feed"
+                  : pathParts[0] === "reports" ? "Báo cáo"
+                  : pathParts[0] === "research" ? "Nghiên cứu"
+                  : pathParts[0] === "sources" ? "Nguồn tin"
+                  : pathParts[0] === "dashboard" ? "Dashboard"
+                  : "Tổng quan";
 
-    return (
-        <SidebarProvider>
-            <TooltipProvider delayDuration={0}>
+  return (
+    <SidebarProvider className="h-screen overflow-hidden flex bg-background">
+      <AppSidebar />
+      
+      <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
+        {/* Topbar (48px / h-12 fixed height) */}
+        <header className="h-12 border-b border-border/50 bg-background flex items-center justify-between px-5 shrink-0 sticky top-0 z-20">
+          {/* Trái: breadcrumb */}
+          <div className="flex items-center gap-1.5 text-[13px]">
+            <span className="text-muted-foreground">TechScout</span>
+            <ChevronRightIcon className="w-3.5 h-3.5 text-muted-foreground/40" />
+            <span className="font-medium text-foreground">{pageLabel}</span>
+          </div>
 
+          {/* Phải: status pills */}
+          <div className="flex items-center gap-2">
+            {/* Pipeline running indicator */}
+            <span className="flex items-center gap-1.5 text-[11px] border border-border/50 rounded-full px-2.5 py-1 text-muted-foreground bg-secondary/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              Pipeline đang chạy
+            </span>
 
-                <AppSidebar/>
-                <SidebarInset>
-                    {/* HEADER */}
-                    <header
-                        className="flex h-16 shrink-0 items-center gap-2 border-b px-4 justify-between sticky top-0 bg-background z-10">
-                        <div className="flex items-center gap-2">
-                            <SidebarTrigger className="-ml-1"/>
-                            <Separator orientation="vertical" className="mr-2 h-4"/>
-                            <Breadcrumb>
-                                <BreadcrumbList>
-                                    <BreadcrumbItem className="hidden md:block">
-                                        <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
-                                    </BreadcrumbItem>
-                                    <BreadcrumbSeparator className="hidden md:block"/>
-                                    <BreadcrumbItem>
-                                        <BreadcrumbPage className="capitalize">{pathname || "Overview"}</BreadcrumbPage>
-                                    </BreadcrumbItem>
-                                </BreadcrumbList>
-                            </Breadcrumb>
-                        </div>
+            {/* Last updated */}
+            <span className="flex items-center gap-1 text-[11px] border border-border/50 rounded-full px-2.5 py-1 text-muted-foreground bg-secondary/20">
+              <ClockIcon className="w-3 h-3" />
+              {relativeTime(metrics.last_run_at ?? new Date().toISOString())}
+            </span>
 
-                        <div className="flex items-center gap-4">
+            {/* Mode toggle — góc phải cùng */}
+            <ModeToggle />
+          </div>
+        </header>
 
-                            {/* Search Bar */}
-                            <div className="relative w-64 hidden lg:block">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground"/>
-                                <Input
-                                    type="search"
-                                    placeholder="Ask Agent anything..."
-                                    className="pl-8 bg-muted/50 focus-visible:ring-1"
-                                />
-                            </div>
-
-                            <button className="relative p-2 text-muted-foreground hover:bg-muted rounded-full">
-                                <Bell size={20}/>
-                                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full"></span>
-                            </button>
-
-                            <ModeToggle/>
-
-                            <Avatar className="h-9 w-9 border">
-                                <AvatarImage src="https://github.com/shadcn.png"/>
-                                <AvatarFallback>AD</AvatarFallback>
-                            </Avatar>
-                        </div>
-                    </header>
-
-                    <main className="flex flex-1 flex-col gap-4 p-6 overflow-y-auto">
-                        <Outlet/>
-                    </main>
-                </SidebarInset>
-            </TooltipProvider>
-        </SidebarProvider>
-    );
+        {/* Content area: independent scroll, p-5 wrapper */}
+        <main className="flex-1 overflow-y-auto p-5 min-w-0">
+          <Outlet />
+        </main>
+      </div>
+    </SidebarProvider>
+  );
 }

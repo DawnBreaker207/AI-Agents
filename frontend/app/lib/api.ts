@@ -1,54 +1,160 @@
-import type {ResearchReport} from "~/types";
+import type { ResearchReport, PendingNews, SourceList, TopicWhitelist, FeedMetrics } from "~/types";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8888/api/v1";
+const API_BASE_URL = (typeof process !== "undefined" && process.env?.API_BASE_URL)
+  || (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL)
+  || "http://localhost:8888";
 
-export async function fetchFromAPI<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-
-    const url = `${API_BASE_URL}/${endpoint}`;
-    const response = await fetch(url, {
-        ...options,
-        headers: {
-            'Content-Type': 'application/json',
-            ...options.headers
-        },
-    });
-    if (!response.ok) {
-        console.error(`❌ API Error: ${response.status} - ${url}`);
-        throw new Error(`API Error: ${response.statusText}`);
-    }
-    return response.json();
+interface ApiResponse<T> {
+  message: string;
+  data: T;
+  timestamp: string;
 }
 
-export const agentApi = {
-    getSignals: () =>
-        fetchFromAPI<any>('signals'),
-    // Bắt đầu nghiên cứu mới hoặc lấy từ cache
-    startResearch: (topic: string, refresh: boolean) =>
-        fetchFromAPI<ResearchReport>('research', {
-            method: 'POST',
-            body: JSON.stringify({
-                topic: topic,
-                force_refresh: refresh
-            })
-        }),
+/**
+ * Generic fetch wrapper that robustly handles both unified APIResponse structures (unwrapping data)
+ * and raw lists/objects returned directly from the backend.
+ */
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const url = `${API_BASE_URL}${path}`;
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json", ...init?.headers },
+    ...init,
+  });
+  if (!res.ok) {
+    console.error(`❌ API Error: ${res.status} - ${url}`);
+    throw new Error(`API error ${res.status}: ${url}`);
+  }
+  const json = await res.json();
+  
+  // Unbox if the response conforms to standard APIResponse wrapping
+  if (json && typeof json === "object" && "data" in json && "message" in json) {
+    return json.data as T;
+  }
+  return json as T;
+}
 
-    // Lấy lịch sử
-    getHistory: (search?: string, category?: string) => {
-        const params = new URLSearchParams();
-        if (search) params.append("search", search);
-        if (category && category !== "all") params.append("category", category);
+/**
+ * GET /health - Check agent status
+ */
+export const getHealth = () =>
+  apiFetch<{ status: string; agent: string }>("/health");
 
-        // Endpoint khớp với @agent_router.get("/history")
-        return fetchFromAPI<ResearchReport[]>(`history?${params.toString()}`);
-    },
+/**
+ * POST /research - Start research pipeline on a new topic
+ */
+export const startResearch = (topic: string, force_refresh = false) =>
+  apiFetch<{ status: string; topic: string }>("/research", {
+    method: "POST",
+    body: JSON.stringify({ topic, force_refresh }),
+  });
 
-    chat: (prompt: string, category: string = "all") =>
-        fetchFromAPI<{ answer: string }>('chat', {
-            method: 'POST',
-            body: JSON.stringify({prompt, category})
-        }),
+/**
+ * POST /chat - Chat with the AI Analyst agent
+ */
+export const chatWithAgent = (prompt: string, category = "all") =>
+  apiFetch<{ answer: string }>("/chat", {
+    method: "POST",
+    body: JSON.stringify({ prompt, category }),
+  });
 
-    // Lấy chi tiết 1 báo cáo
-    getReportById: (id: string | number) =>
-        fetchFromAPI<ResearchReport>(`report/${id}`),
+/**
+ * GET /api/news/:status - Get news filtered by status with pagination
+ */
+export const getNewsByStatus = (status: string, page = 1, size = 20) =>
+  apiFetch<PendingNews[]>(`/api/news/${status.toLowerCase()}?page=${page}&size=${size}`);
+
+/**
+ * GET /api/news/watch - Get watchlist news
+ */
+export const getWatchNews = (category?: string, page = 1, size = 20) => {
+  const q = new URLSearchParams({ page: String(page), size: String(size) });
+  if (category) q.set("category", category);
+  return apiFetch<PendingNews[]>(`/api/news/watch?${q}`);
 };
+
+/**
+ * POST /api/news/:id/promote - Promote news to KEEP status manually
+ */
+export const promoteNews = (newsId: number) =>
+  apiFetch<{ news_id: number; status: string }>(`/api/news/${newsId}/promote`, { method: "POST" });
+
+/**
+ * POST /api/research/:id - Trigger deep analysis (Stage 3) on news
+ */
+export const triggerDeepAnalysis = (newsId: number) =>
+  apiFetch<{ status: string }>(`/api/research/${newsId}`, { method: "POST" });
+
+/**
+ * GET /history - Get research reports history with search and category filters
+ */
+export const getReportHistory = (search?: string, category?: string) => {
+  const params = new URLSearchParams();
+  if (search) params.append("search", search);
+  if (category && category !== "all") params.append("category", category);
+  const qs = params.toString();
+  return apiFetch<ResearchReport[]>(`/history${qs ? `?${qs}` : ""}`);
+};
+
+/**
+ * GET /api/reports/:id - Get a report by its ID (includes source_citations, citation_count)
+ * This is the CORRECT, verified endpoint with full citation data.
+ */
+export const getReportById = (id: string | number) =>
+  apiFetch<ResearchReport>(`/api/reports/${id}`);
+
+/**
+ * GET /api/reports/strategic - Get strategic research reports
+ */
+export const getStrategicReports = () =>
+  apiFetch<ResearchReport[]>("/api/reports/strategic");
+
+/**
+ * GET /api/sources - Get RSS feed sources
+ */
+export const getSources = () =>
+  apiFetch<SourceList[]>("/api/sources");
+
+/**
+ * PUT /api/sources/:id/toggle - Toggle RSS source active state
+ */
+export const toggleSource = (sourceId: number) =>
+  apiFetch<{ id: number; is_active: boolean }>(`/api/sources/${sourceId}/toggle`, { method: "PUT" });
+
+/**
+ * GET /api/whitelist - Get Whitelist topics
+ */
+export const getWhitelist = () =>
+  apiFetch<TopicWhitelist[]>("/api/whitelist");
+
+/**
+ * POST /api/whitelist - Add new topic to Whitelist
+ */
+export const addWhitelistTopic = (topic: string, boost_score: number, force_keep: boolean) =>
+  apiFetch<{ status: string; topic: string }>("/api/whitelist", {
+    method: "POST",
+    body: JSON.stringify({ topic, boost_score, force_keep }),
+  });
+
+/**
+ * DELETE /api/whitelist/:id - Delete topic from Whitelist by ID
+ */
+export const deleteWhitelistTopic = (topicId: number) =>
+  apiFetch<{ status: string }>(`/api/whitelist/${topicId}`, { method: "DELETE" });
+
+/**
+ * GET /api/metrics - Get overview metrics
+ */
+export const getFeedMetrics = () =>
+  apiFetch<FeedMetrics>("/api/metrics");
+
+/**
+ * POST /api/pipeline/trigger - Manually trigger the scraping pipeline
+ */
+export const triggerPipeline = () =>
+  apiFetch<{ status: string; message: string }>("/api/pipeline/trigger", { method: "POST" });
+
+/**
+ * POST /api/pipeline/translate - Batch translate existing English titles to Vietnamese
+ */
+export const translateTitles = () =>
+  apiFetch<{ status: string; message: string }>("/api/pipeline/translate", { method: "POST" });
