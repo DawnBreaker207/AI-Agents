@@ -20,7 +20,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   try {
     const rawNews = await getNewsByStatus(tab, page);
-    // CHUẨN HOÁ: Bất kể phần nào không có link gốc thì không được hiện lên trang feed
     const news = rawNews.filter(n => n.url && n.url.trim() !== "");
     return { tab, page, news };
   } catch (err) {
