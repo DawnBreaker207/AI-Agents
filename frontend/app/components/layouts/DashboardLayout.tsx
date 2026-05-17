@@ -75,7 +75,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 
         {/* Content area: independent scroll, p-5 wrapper */}
         <main className="flex-1 overflow-y-auto p-5 min-w-0">
-          <Outlet />
+          <Outlet context={{ metrics }} />
         </main>
       </div>
     </SidebarProvider>

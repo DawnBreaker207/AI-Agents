@@ -19,49 +19,61 @@ export async function loader({ request }: Route.LoaderArgs) {
   const page = Number(url.searchParams.get("page") ?? 1);
 
   try {
-    const [metrics, rawNews] = await Promise.all([
-      getFeedMetrics(),
-      getNewsByStatus(tab, page)
-    ]);
+    const rawNews = await getNewsByStatus(tab, page);
     // CHUẨN HOÁ: Bất kể phần nào không có link gốc thì không được hiện lên trang feed
     const news = rawNews.filter(n => n.url && n.url.trim() !== "");
-    return { tab, page, news, metrics };
+    return { tab, page, news };
   } catch (err) {
     console.error("Feed loader failed, returning empty state:", err);
-    return {
-      tab,
-      page,
-      news: [],
-      metrics: {
-        total_today: 0,
-        keep_urgent: 0,
-        keep: 0,
-        watch: 0,
-        trash: 0,
-        processed: 0,
-        last_run_at: null
-      }
-    };
+    return { tab, page, news: [] };
   }
 }
 
+import { useOutletContext } from "react-router";
+import type { FeedMetrics } from "~/types";
+
 export default function Feed({ loaderData }: Route.ComponentProps) {
-  const { tab, page, news, metrics } = loaderData;
+  const { tab, page, news } = loaderData;
+  const { metrics } = useOutletContext<{ metrics: FeedMetrics }>();
   const [isTriggering, setIsTriggering] = useState(false);
   const { revalidate, state } = useRevalidator();
 
-  // 1. SSE Realtime Connection
+  // 1. SSE Realtime Connection with robust reconnect
   useEffect(() => {
-    const sse = new EventSource("http://localhost:8888/api/news/stream");
-    sse.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "new_news" && state === "idle") {
-          revalidate(); // Tự động cập nhật data khi có tin mới
-        }
-      } catch (e) {}
+    let sse: EventSource | null = null;
+    let retryCount = 0;
+    let timeoutId: NodeJS.Timeout;
+
+    const connect = () => {
+      sse = new EventSource("http://localhost:8888/api/news/stream");
+      
+      sse.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "new_news" && state === "idle") {
+            revalidate(); // Tự động cập nhật data khi có tin mới
+          }
+        } catch (e) {}
+      };
+
+      sse.onerror = () => {
+        sse?.close();
+        const delay = Math.min(10000, 1000 * Math.pow(2, retryCount));
+        retryCount++;
+        timeoutId = setTimeout(connect, delay);
+      };
+
+      sse.onopen = () => {
+        retryCount = 0;
+      };
     };
-    return () => sse.close();
+
+    connect();
+
+    return () => {
+      sse?.close();
+      clearTimeout(timeoutId);
+    };
   }, [state, revalidate]);
 
   const handleTrigger = async () => {
@@ -243,6 +255,45 @@ export default function Feed({ loaderData }: Route.ComponentProps) {
         </div>
       )}
 
+    </div>
+  );
+}
+
+import { isRouteErrorResponse } from "react-router";
+
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+  if (isRouteErrorResponse(error)) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center max-w-lg mx-auto">
+        <div className="bg-destructive/10 p-4 rounded-full mb-4">
+          <RefreshCcw className="w-8 h-8 text-destructive animate-pulse" />
+        </div>
+        <h1 className="text-xl font-bold mb-2">Lỗi tải dữ liệu</h1>
+        <p className="text-muted-foreground mb-6">
+          {error.status} {error.statusText}
+        </p>
+        <Link to="/feed" className="bg-primary text-primary-foreground px-6 py-2 rounded-full text-sm font-medium hover:bg-primary/90 transition-colors">
+          Thử lại
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center py-24 text-center max-w-lg mx-auto">
+      <div className="bg-destructive/10 p-4 rounded-full mb-4">
+        <RefreshCcw className="w-8 h-8 text-destructive" />
+      </div>
+      <h1 className="text-xl font-bold mb-2">Có lỗi xảy ra</h1>
+      <p className="text-muted-foreground mb-6">
+        Hệ thống không thể tải luồng tin tức lúc này. Vui lòng kiểm tra kết nối mạng hoặc thử lại sau.
+      </p>
+      <button 
+        onClick={() => window.location.reload()} 
+        className="bg-primary text-primary-foreground px-6 py-2 rounded-full text-sm font-medium hover:bg-primary/90 transition-colors"
+      >
+        Tải lại trang
+      </button>
     </div>
   );
 }
