@@ -158,3 +158,45 @@ export const triggerPipeline = () =>
  */
 export const translateTitles = () =>
   apiFetch<{ status: string; message: string }>("/api/pipeline/translate", { method: "POST" });
+
+// ── Job Watch API ──────────────────────────────────────────────────────────
+
+export interface JobWatchItem {
+  id: number;
+  position: string;
+  level: string;
+  location_type: string;
+  city: string;
+  created_at: string | null;
+}
+
+export interface JobResult {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  location_type: string;
+  work_model: string;
+  url: string;
+  source: string;
+  description: string;
+  posted_at: string | null;
+  salary: string;
+  tags: string[];
+}
+
+export const getJobWatches = () =>
+  apiFetch<JobWatchItem[]>("/api/jobs/watch");
+
+export const addJobWatch = (position: string, level: string, location_type: string, city: string) => {
+  const params = new URLSearchParams({ position, level, location_type, city });
+  return apiFetch<JobWatchItem>(`/api/jobs/watch?${params}`, { method: "POST" });
+};
+
+export const deleteJobWatch = (watchId: number) =>
+  apiFetch<{ id: number }>(`/api/jobs/watch/${watchId}`, { method: "DELETE" });
+
+export const searchJobs = (keyword: string, location_type: string, level: string, city: string) => {
+  const params = new URLSearchParams({ keyword, location_type, level, city });
+  return apiFetch<JobResult[]>(`/api/jobs/search?${params}`);
+};

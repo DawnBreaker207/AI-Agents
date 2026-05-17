@@ -14,7 +14,8 @@ import {
   FlaskConical as FlaskConicalIcon, 
   Radio as RadioIcon, 
   LayoutDashboard as LayoutDashboardIcon,
-  Radar as RadarIcon
+  Radar as RadarIcon,
+  Briefcase as BriefcaseIcon
 } from "lucide-react";
 import { ModeToggle } from "~/components/mode-toggle";
 import type { FeedMetrics } from "~/types";
@@ -22,6 +23,7 @@ import type { FeedMetrics } from "~/types";
 const MAIN_ITEMS = [
   { to: "/dashboard", label: "Tổng quan thị trường", icon: LayoutDashboardIcon, badgeKey: null },
   { to: "/feed",      label: "Live News Feed",       icon: RssIcon,             badgeKey: "keep_urgent" as const },
+  { to: "/jobs",      label: "Tìm kiếm việc làm",    icon: BriefcaseIcon,       badgeKey: null },
   { to: "/reports",   label: "Báo cáo chiến lược",   icon: FileTextIcon,        badgeKey: "processed" as const   },
   { to: "/research",  label: "Nghiên cứu chuyên sâu",icon: FlaskConicalIcon,    badgeKey: null                   },
 ] as const;

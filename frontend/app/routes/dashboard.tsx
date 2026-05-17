@@ -14,6 +14,7 @@ import { useState, useEffect } from "react";
 import type { Route } from "./+types/dashboard";
 import type { ResearchReport, FeedMetrics } from "~/types";
 import { relativeTime } from "~/lib/utils";
+import JobWatchWidget from "~/components/JobWatchWidget";
 
 export const meta: Route.MetaFunction = () => [
   { title: "Tổng quan thị trường - TechScout Intelligence" },
@@ -234,6 +235,11 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
           <ReportColumn title="Nghiên cứu Học thuật" icon={<Microscope className="w-3.5 h-3.5 text-orange-500" />} color="orange" items={cols.academic} />
           <ReportColumn title="Xu hướng Công nghệ" icon={<Cpu className="w-3.5 h-3.5 text-indigo-500" />} color="indigo" items={cols.tech} />
         </div>
+      </div>
+
+      {/* ── Job Watch Section ── */}
+      <div className="bg-card border border-border/50 rounded-xl p-5">
+        <JobWatchWidget />
       </div>
 
       <div className="fixed bottom-6 right-6 z-50">
