@@ -45,6 +45,9 @@ app.add_middleware(
 
 app.include_router(api_router)
 
+from app.api.v1.jobs import router as jobs_router
+app.include_router(jobs_router)
+
 if __name__ == "__main__":
     uvicorn.run(
         "app.main:app",

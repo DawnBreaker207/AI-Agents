@@ -24,4 +24,4 @@ apscheduler>=3.10
 python-dotenv
 requests
 beautifulsoup4
-ddgs
+duckduckgo-search
