@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  backend:
+    image: techscout-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: techscout-backend
+    restart: always
+    ports:
+      - "8888:8888"
+    volumes:
+      - backend-data:/workspace/data
+    env_file:
+      - ./backend/.env
+    environment:
+      - PORT=8888
+      - DATABASE_URL=sqlite+aiosqlite:////workspace/data/app.db
+
+  frontend:
+    image: techscout-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: techscout-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - PORT=3000
+      # Internal URL for Server-Side Rendering (SSR) fetches inside the Docker network
+      - API_BASE_URL=http://backend:8888
+      # External URL for browser/client-side fetches. Change 'localhost' to your server's IP/domain if hosting remotely!
+      - VITE_API_URL=http://localhost:8888
+
+volumes:
+  backend-data:
+    name: techscout-backend-data
+    driver: local
