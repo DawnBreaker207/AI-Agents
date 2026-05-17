@@ -8,8 +8,20 @@ from app.core.brain import BrainService
 from app.core.prompt import STAGE2_FILTER_PROMPT
 from app.models import PendingNews, TopicWhitelist
 from app.tools.notify import DiscordNotifier
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+class FilterSignal(BaseModel):
+    id: int
+    title_vi: str = ""
+    impact_score: float = 0.0
+    category: str = "OTHER"
+    matched_topics: list[str] = Field(default_factory=list)
+    reason: str = ""
+
+class FilterResponse(BaseModel):
+    signals: list[FilterSignal]
 
 CRITICAL_KEYWORDS = [
     "mass layoff", "chapter 11", "bankruptcy", "acquisition",
@@ -81,21 +93,20 @@ class GatekeeperStage:
 
         try:
             parsed = json.loads(response)
-            signals = parsed.get("signals", [])
-        except Exception:
+            validated = FilterResponse.model_validate(parsed)
+            signals = validated.signals
+        except Exception as e:
+            logger.error(f"Gatekeeper: JSON parse/validation error: {e}")
             signals = []
 
         urgent_ids = []
         keep_ids = []
 
         for signal in signals:
-            try:
-                news_id = int(signal.get("id"))
-            except (ValueError, TypeError):
-                continue
-            score = float(signal.get("impact_score", 0))
-            category = signal.get("category", "OTHER")
-            matched = signal.get("matched_topics", []) or []
+            news_id = signal.id
+            score = signal.impact_score
+            category = signal.category
+            matched = signal.matched_topics
 
             news = next((n for n in batch if n.id == news_id), None)
             if not news:
@@ -119,7 +130,7 @@ class GatekeeperStage:
             news.matched_topics = matched
 
             # Persist Vietnamese title if provided by AI (fallback to original title)
-            title_vi = signal.get("title_vi", "").strip()
+            title_vi = signal.title_vi.strip()
             if title_vi:
                 news.title = title_vi
 
@@ -156,6 +167,10 @@ class GatekeeperStage:
                     )
 
         await db.commit()
+        if urgent_ids or keep_ids:
+            from app.core.events import news_broadcaster
+            news_broadcaster.broadcast({"type": "new_news"})
+            
         logger.info(
             f"Gatekeeper: {len(urgent_ids)} KEEP_URGENT, "
             f"{len(keep_ids)} KEEP, triggering Stage 3."

@@ -168,5 +168,8 @@ class ScoutStage:
                     logger.error(f"Scout error [{source.name}]: {e}", exc_info=True)
 
         await db.commit()
+        if new_count > 0:
+            from app.core.events import news_broadcaster
+            news_broadcaster.broadcast({"type": "new_news"})
         logger.info(f"Scout completed: {new_count} new articles (all verified accessible).")
         return new_count

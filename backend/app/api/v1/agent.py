@@ -140,32 +140,8 @@ from app.database import AsyncSessionLocal
 @api_router.get("/api/news/stream")
 async def stream_news():
     """SSE Endpoint for Realtime News Feed Updates"""
-    async def event_generator():
-        last_id = 0
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(PendingNews.id).order_by(PendingNews.id.desc()).limit(1))
-            last_id = result.scalar_one_or_none() or 0
-            
-        while True:
-            await asyncio.sleep(3)
-            try:
-                async with AsyncSessionLocal() as db:
-                    new_items_result = await db.execute(
-                        select(PendingNews.id).where(PendingNews.id > last_id).order_by(PendingNews.id.desc())
-                    )
-                    new_ids = new_items_result.scalars().all()
-                    if new_ids:
-                        last_id = new_ids[0]
-                        yield f"data: {json.dumps({'type': 'new_news'})}\n\n"
-                    else:
-                        yield f"data: {json.dumps({'type': 'ping'})}\n\n"
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"SSE Error: {e}")
-                await asyncio.sleep(5)
-                
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    from app.core.events import news_broadcaster
+    return StreamingResponse(news_broadcaster.subscribe(), media_type="text/event-stream")
 
 @api_router.get("/api/news/pending")
 async def get_pending_news(
