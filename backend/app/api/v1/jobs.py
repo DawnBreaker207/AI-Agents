@@ -187,97 +187,9 @@ async def _fetch_themuse(client: httpx.AsyncClient, q: str) -> List[dict]:
         return []
 
 
-async def _fetch_jsearch(client: httpx.AsyncClient, q: str) -> List[dict]:
-    """JSearch (RapidAPI) — aggregates Google for Jobs, LinkedIn, Indeed.
-    Requires RAPIDAPI_KEY in .env. Falls back gracefully if not set.
-    """
-    api_key = os.getenv("RAPIDAPI_KEY", "")
-    if not api_key:
-        print("[JSearch] Skipped: RAPIDAPI_KEY not configured in .env", flush=True)
-        return []
-    print(f"[JSearch] Fetching q='{q} remote'", flush=True)
-    try:
-        r = await client.get(
-            "https://jsearch.p.rapidapi.com/search",
-            params={"query": f"{q} remote developer", "num_pages": "1", "page": "1"},
-            headers={
-                "X-RapidAPI-Key": api_key,
-                "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
-            },
-            timeout=12,
-        )
-        if r.status_code != 200:
-            print(f"[JSearch] HTTP {r.status_code}", flush=True)
-            return []
-        jobs = r.json().get("data", [])[:15]
-        print(f"[JSearch] Got {len(jobs)} jobs", flush=True)
-        return [
-            _make_job(
-                id=f"jsearch-{j.get('job_id', idx)}",
-                title=j.get("job_title", ""),
-                company=j.get("employer_name", ""),
-                location=f"{j.get('job_city', '')} {j.get('job_country', '')}".strip() or "Remote",
-                location_type="overseas", work_model="remote",
-                url=j.get("job_apply_link", ""), source="JSearch",
-                description=_strip_html(j.get("job_description", "")),
-                posted_at=j.get("job_posted_at_datetime_utc"),
-                salary=(
-                    f"{j.get('job_min_salary', '')}-{j.get('job_max_salary', '')} {j.get('job_salary_currency', '')}".strip(" -")
-                    if j.get("job_min_salary") else ""
-                ),
-                tags=j.get("job_required_skills") or [],
-            )
-            for idx, j in enumerate(jobs)
-        ]
-    except Exception as e:
-        print(f"[JSearch] ERR: {e}", flush=True)
-        return []
 
 
-async def _fetch_adzuna_overseas(client: httpx.AsyncClient, q: str) -> List[dict]:
-    """Adzuna global — requires free API key from adzuna.com.
-    Set ADZUNA_APP_ID / ADZUNA_API_KEY in .env to activate.
-    """
-    app_id = os.getenv("ADZUNA_APP_ID", "")
-    api_key = os.getenv("ADZUNA_API_KEY", "")
-    if not app_id or not api_key:
-        print("[Adzuna] Skipped: ADZUNA_APP_ID / ADZUNA_API_KEY not set.", flush=True)
-        return []
-    print(f"[Adzuna] Fetching q='{q}'", flush=True)
-    try:
-        r = await client.get(
-            "https://api.adzuna.com/v1/api/jobs/us/search/1",
-            params={
-                "app_id": app_id, "app_key": api_key,
-                "what": q, "what_and": "remote",
-                "results_per_page": 15,
-                "content-type": "application/json",
-            },
-            timeout=12,
-        )
-        if r.status_code != 200:
-            print(f"[Adzuna] HTTP {r.status_code}", flush=True)
-            return []
-        results = r.json().get("results", [])
-        print(f"[Adzuna] Got {len(results)} jobs", flush=True)
-        return [
-            _make_job(
-                id=f"adzuna-{j.get('id', idx)}",
-                title=j.get("title", ""),
-                company=(j.get("company") or {}).get("display_name", ""),
-                location=(j.get("location") or {}).get("display_name", "US Remote"),
-                location_type="overseas", work_model="remote",
-                url=j.get("redirect_url", ""), source="Adzuna",
-                description=_strip_html(j.get("description", "")),
-                posted_at=j.get("created"),
-                salary=f"{j.get('salary_min','')}-{j.get('salary_max','')}".strip("-"),
-                tags=[],
-            )
-            for idx, j in enumerate(results)
-        ]
-    except Exception as e:
-        print(f"[Adzuna] ERR: {e}", flush=True)
-        return []
+
 
 
 # ── Domestic: per-site DDGS search + strict URL validation ───────────────────
@@ -510,8 +422,6 @@ async def search_jobs(
                 _fetch_arbeitnow(client, q),
                 _fetch_jobicy(client, q),
                 _fetch_themuse(client, q),
-                _fetch_jsearch(client, q),
-                _fetch_adzuna_overseas(client, q),
             )
             seen: set = set()
             for batch in batches:
