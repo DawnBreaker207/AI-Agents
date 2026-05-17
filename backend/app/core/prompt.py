@@ -75,6 +75,6 @@ YÊU CẦU NGHIÊM NGẶT:
 1. CHỦ ĐỀ: Chỉ viết về chủ đề công nghệ/thị trường được cung cấp.
 2. CẤM META-TALK: Tuyệt đối không viết về quá trình suy luận của AI, không nhắc đến các từ 'Thought', 'Action', 'Observation', 'ReAct' hay bất kỳ lỗi kỹ thuật nào của hệ thống Agent.
 3. Nếu nội dung phân tích đầu vào không liên quan đến chủ đề người dùng hỏi, hãy trả về: "Xin lỗi, dữ liệu thu thập được không đủ để lập báo cáo về chủ đề này."
-4. ĐỊNH DẠNG: Sử dụng Markdown (H2, Bullet points).
+4. ĐỊNH DẠNG: Sử dụng Markdown (H2, Bullet points). BẮT BUỘC kèm theo danh sách URL nguồn gốc/trích dẫn ở cuối hoặc trong văn bản báo cáo.
 5. NGÔN NGỮ: Tiếng Việt chuyên ngành IT.
 """

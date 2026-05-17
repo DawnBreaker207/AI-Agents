@@ -1,28 +1,40 @@
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+from pydantic_settings import BaseSettings
 
+# Lấy thư mục gốc của dự án (thư mục backend/)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-class Settings:
-    # Open Router Config
-    OPENROUTER_KEY: str = os.getenv("OPENROUTER_KEY")
-    OPENROUTER_URL: str = os.getenv("OPENROUTER_URL")
+class Settings(BaseSettings):
+    # OpenRouter
+    OPENROUTER_KEY: str = ""
+    OPENROUTER_URL: str = "https://openrouter.ai/api/v1"
 
-    # Model
-    LOW_MODEL: str = os.getenv("LOW_MODEL")
-    HIGH_MODEL: str = os.getenv("HIGH_MODEL")
+    # Models
+    LOW_MODEL: str  = "anthropic/claude-haiku-4-5"
+    HIGH_MODEL: str = "anthropic/claude-sonnet-4-5"
 
-    # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL")
+    # Database — Dùng đường dẫn tuyệt đối để tránh nhầm lẫn CWD
+    DATABASE_URL: str = f"sqlite+aiosqlite:///{os.path.join(BASE_DIR, 'data', 'app.db')}"
 
-    APP_NAME: str = os.getenv("APP_NAME")
-    APP_URL: str = os.getenv("APP_URL")
-    DATA_DIR: str = os.getenv("DATA_DIR", "../../data")
-
-    TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN")
-    TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID")
+    # App
+    APP_NAME: str = "TechScout"
+    APP_URL: str  = "http://localhost:8000"
+    DATA_DIR: str = os.path.join(BASE_DIR, "data")
     WEB_CONTENT_MAX_LENGTH: int = 5000
 
+    # Discord Webhooks
+    DISCORD_WEBHOOK_RAW_FEED:          str = ""
+    DISCORD_WEBHOOK_MARKET_SIGNALS:    str = ""
+    DISCORD_WEBHOOK_STRATEGIC_REPORTS: str = ""
+
+    class Config:
+        env_file = ".env"
+        extra = "ignore"
 
 settings = Settings()
+
+# Đảm bảo DATABASE_URL luôn là đường dẫn tuyệt đối trỏ tới backend/data/app.db để tránh nhầm lẫn CWD
+if "sqlite" in settings.DATABASE_URL:
+    settings.DATABASE_URL = f"sqlite+aiosqlite:///{os.path.join(BASE_DIR, 'data', 'app.db')}"
+

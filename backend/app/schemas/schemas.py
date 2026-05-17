@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -35,6 +35,11 @@ class ResearchReport(BaseModel):
 
 
 # --- RESPONSE SCHEMAS ---
+class APIResponse(BaseModel):
+    message: str
+    data: Optional[Any] = None
+    timestamp: datetime = Field(default_factory=datetime.now)
+
 class ReportResponse(BaseModel):
     id: int
     title: str
@@ -53,3 +58,39 @@ class SignalSchema(BaseModel):
     keywords: List[str]
     priority_score: int
     url: str
+
+
+class PendingNewsSchema(BaseModel):
+    id: int
+    title: str
+    snippet: Optional[str] = None
+    url: str
+    source_domain: Optional[str] = None
+    published_at: Optional[datetime] = None
+    status: str
+    impact_score: Optional[float] = None
+    category: Optional[str] = None
+    matched_topics: Optional[Any] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SourceListSchema(BaseModel):
+    id: int
+    name: str
+    url: str
+    type: str
+    is_active: bool
+    priority_weight: float
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TopicWhitelistSchema(BaseModel):
+    id: int
+    topic: str
+    boost_score: float
+    force_keep: bool
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)

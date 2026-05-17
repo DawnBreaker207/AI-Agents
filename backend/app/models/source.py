@@ -1,0 +1,11 @@
+from sqlalchemy import Column, Integer, String, Boolean, Float
+from app.database import Base
+
+class SourceList(Base):
+    __tablename__ = "source_list"
+    id              = Column(Integer, primary_key=True, index=True)
+    name            = Column(String(255), nullable=False)
+    url             = Column(String(500), nullable=False, unique=True)
+    type            = Column(String(20), default="RSS")        # RSS or SCRAPE feed types
+    is_active       = Column(Boolean, default=True)
+    priority_weight = Column(Float, default=1.0)

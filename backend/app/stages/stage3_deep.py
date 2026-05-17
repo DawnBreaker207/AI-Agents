@@ -1,92 +1,243 @@
 import json
-import re
 import logging
+import re
+
+import httpx
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.brain import BrainService
-from app.core.prompt import STAGE3_REACT_PROMPT
-from app.tools.web_search import search_the_web
-from app.tools.notify import notify_urgent
-from core.utils import parse_xml_tag
+from app.core.config import settings
+from app.core.prompt import STAGE3_REACT_PROMPT as STAGE3_DEEP_PROMPT
+from app.models import PendingNews, ResearchReport
+from app.tools.notify import DiscordNotifier
 
 logger = logging.getLogger(__name__)
 
+_MIN_CONTENT_LENGTH = 300
+
+# String matches to identify blocked pages, bad status, or Cloudflare barriers
+_JUNK_CONTENT_SIGNALS = [
+    "404", "page not found", "không tìm thấy trang",
+    "access denied", "403 forbidden",
+    "enable javascript", "please enable cookies",
+    "subscribe to continue", "sign in to read",
+    "just a moment", "checking your browser",
+]
+
+
+async def _fetch_full_content(url: str) -> tuple[str, bool, str]:
+    """Call Jina Reader API to fetch and normalize original URL page content to clean Markdown."""
+    jina_url = f"https://r.jina.ai/{url}"
+    async with httpx.AsyncClient(timeout=30) as client:
+        try:
+            res = await client.get(
+                jina_url,
+                headers={"Accept": "text/markdown", "User-Agent": "TechScout/1.0"},
+                follow_redirects=True,
+            )
+            if res.status_code >= 400:
+                return "", False, f"Jina HTTP {res.status_code}"
+
+            content = res.text.strip()
+
+            if len(content) < _MIN_CONTENT_LENGTH:
+                return "", False, f"Content too short ({len(content)} characters)"
+
+            content_lower = content.lower()
+            for signal in _JUNK_CONTENT_SIGNALS:
+                if signal in content_lower:
+                    return "", False, f"Junk or challenge page detected: '{signal}'"
+
+            return content[:settings.WEB_CONTENT_MAX_LENGTH], True, ""
+
+        except httpx.TimeoutException:
+            return "", False, "Jina timeout"
+        except Exception as e:
+            return "", False, f"Jina error: {type(e).__name__}: {e}"
+
 
 class DeepAnalysisStage:
+
     def __init__(self):
         self.brain = BrainService()
 
-    def _extract_impact_score(self, text: str) -> int:
-        """Trích xuất điểm ảnh hưởng bằng Regex từ nội dung Finalize"""
-        match = re.search(r"Impact Score:\s*(\d+)", text, re.IGNORECASE)
-        if match:
-            score = int(match.group(1))
-            return min(max(score, 1), 10)  # Đảm bảo score nằm trong [1, 10]
-        return 5
-
-    async def run(self, filtered_signals: list) -> dict:
+    async def _run_react_loop(self, filtered_signals: list) -> dict:
+        """Run an immutable 5-step ReAct reasoning loop using a high-tier reasoning model."""
         messages = [
-            {"role": "system", "content": STAGE3_REACT_PROMPT},
-            {"role": "user", "content": json.dumps(filtered_signals, ensure_ascii=False)}
+            {"role": "system", "content": STAGE3_DEEP_PROMPT},
+            {"role": "user", "content": json.dumps(filtered_signals, ensure_ascii=False)},
         ]
 
-        logger.info("🧠 Stage 3: Bắt đầu vòng lặp ReAct phân tích chuyên sâu...")
+        final_result = {"status": "error", "analysis": "ReAct loop failed to complete.", "impact_score": 1}
 
         for i in range(5):
-            # Dùng High-reasoning Model để suy luận
-            response = self.brain.call_ai(messages, model_tier="high")
+            response = await self.brain.call_ai_async(messages, model_tier="high")
+            messages.append({"role": "assistant", "content": response})
 
-            # KIỂM TRA TRẠNG THÁI KẾT THÚC (Finalize)
+            # Flexibly parse either XML-enclosed tags or raw JSON structures
+            parsed = {}
             if "<analysis>" in response:
-                extracted_data = parse_xml_tag(response, "analysis")
-
-                # Ưu tiên lấy text từ JSON, nếu không có mới dùng split
-                final_content = extracted_data.get("deep_analysis_text")
-                if not final_content:
-                    if "Finalize:" in response:
-                        final_content = response.split("Finalize:")[-1].strip()
-                    else:
-                        # Nếu không có cả key lẫn keyword, lấy đại nội dung trong thẻ hoặc response thô
-                        final_content = str(extracted_data)
-
-                final_content = re.sub(r"<analysis>.*?</analysis>", "", final_content, flags=re.DOTALL).strip()
-
-                logger.info(f"✅ Stage 3 hoàn tất. Score: {extracted_data.get('impact_score')}")
-                return {
-                    "status": "success",
-                    "analysis": final_content,
-                    "impact_score": extracted_data.get("impact_score", 5),
-                    "raw_json": extracted_data
-                }
-
-            # XỬ LÝ HÀNH ĐỘNG (Action)
-            action_match = re.search(r"Action:\s*([A-Z_]+)\((.*?)\)", response)
-            if action_match:
-                tool_name = action_match.group(1)
-                args = action_match.group(2).strip("\"'")
-
-                logger.info(f"🛠 Agent gọi Tool: {tool_name} với args: {args}")
-
-                observation = ""
-                if tool_name == "SEARCH_MORE":
-                    search_results = search_the_web(args)
-                    observation = json.dumps(search_results, ensure_ascii=False)
-                elif tool_name == "NOTIFY_URGENT":
-                    await notify_urgent(args)
-                    observation = "Đã gửi thông báo khẩn cấp tới Telegram."
-                else:
-                    observation = f"Lỗi: Tool {tool_name} không tồn tại."
-
-                # Lưu vết suy luận vào context
-                messages.append({"role": "assistant", "content": response})
-                messages.append({"role": "user", "content": f"Observation: {observation}"})
+                from app.core.utils import parse_xml_tag
+                parsed = parse_xml_tag(response, "analysis")
             else:
-                # Nếu AI không gọi tool và cũng không Finalize, ép nó phải kết thúc hoặc nhắc nhở
-                messages.append(
-                    {"role": "user", "content": "Hãy đưa ra kết luận cuối cùng bằng định dạng Finalize: ..."})
+                try:
+                    parsed = json.loads(response)
+                except Exception:
+                    json_match = re.search(r"\{.*\}", response, re.DOTALL)
+                    parsed = json.loads(json_match.group()) if json_match else {}
 
-        # Trường hợp xấu nhất: Bị lặp quá 5 lần
-        logger.warning("⚠️ Stage 3: Vòng lặp đạt giới hạn nhưng không thể Finalize.")
-        return {
-            "status": "error",
-            "analysis": "Không thể tổng hợp báo cáo do thiếu dữ liệu hoặc lỗi suy luận vòng lặp.",
-            "impact_score": 1
-        }
+            action = parsed.get("action", "")
+
+            # Check if final analysis is reached or successfully outputted
+            if "<analysis>" in response or action == "Finalize":
+                raw_json = parsed.get("output", parsed) if action == "Finalize" else parsed
+                final_result = {
+                    "status": "success",
+                    "analysis": str(raw_json.get("deep_analysis_text", "")),
+                    "impact_score": float(raw_json.get("impact_score", 5)),
+                    "raw_json": raw_json,
+                }
+                break
+
+            elif action in ("Search", "Fetch", "Think"):
+                messages.append({
+                    "role": "user",
+                    "content": f"[Tool result for step {i + 1}]: Processed."
+                })
+
+        return final_result
+
+    async def run(self, news_id: int, db: AsyncSession) -> dict:
+        """Orchestrate Stage 3 analysis: fetch content via Jina, run ReAct loop, save findings, and notify Discord."""
+        notifier = DiscordNotifier()
+
+        result = await db.execute(
+            select(PendingNews).where(PendingNews.id == news_id)
+        )
+        news = result.scalar_one_or_none()
+        if not news:
+            logger.error(f"Stage 3: PendingNews id={news_id} not found.")
+            return {"status": "error", "analysis": "Article not found.", "impact_score": 1}
+
+        logger.info(f"Stage 3: Starting analysis on '{news.title[:60]}' [{news.url}]")
+        content, is_valid, fetch_reason = await _fetch_full_content(news.url)
+
+        if not is_valid:
+            logger.warning(
+                f"Stage 3: [INACCESSIBLE] {fetch_reason} — {news.url}"
+            )
+            news.status = "INACCESSIBLE"
+            await db.commit()
+            return {
+                "status": "skipped",
+                "reason": fetch_reason,
+                "news_id": news_id,
+                "url": news.url,
+            }
+
+        logger.info(f"Stage 3: Successfully fetched {len(content)} characters from {news.url}")
+
+        filtered_signals = [{
+            "title": news.title,
+            "url": news.url,
+            "source_domain": news.source_domain or "",
+            "category": news.category or "OTHER",
+            "content": content,
+            "snippet": news.snippet or "",
+        }]
+
+        result_data = await self._run_react_loop(filtered_signals)
+
+        if result_data.get("status") == "success":
+            raw = result_data.get("raw_json", {})
+
+            # Extract bibliography citations and cap at 10 items
+            source_citations = [news.url]
+            analysis_text = result_data.get("analysis", "")
+            additional_urls = re.findall(r"https?://[^\s\)\]\>\"\']+" , analysis_text)
+            for u in additional_urls:
+                u_clean = u.rstrip(".,;:!?")
+                if u_clean not in source_citations:
+                    source_citations.append(u_clean)
+            source_citations = source_citations[:10]
+
+            # ── Format tech_trends (list[dict]) → human-readable text ──
+            tech_trends_raw = raw.get("tech_trends", "")
+            if isinstance(tech_trends_raw, list):
+                tech_lines = []
+                for t in tech_trends_raw:
+                    if isinstance(t, dict):
+                        trend = t.get("trend") or t.get("name") or ""
+                        desc  = t.get("description") or t.get("update") or t.get("details") or ""
+                        if trend:
+                            tech_lines.append(f"• **{trend}**: {desc}".strip(": "))
+                technical_deep_dive_text = "\n".join(tech_lines) if tech_lines else ""
+            elif isinstance(tech_trends_raw, str):
+                technical_deep_dive_text = tech_trends_raw
+            else:
+                technical_deep_dive_text = ""
+
+            # ── Format employment_status (dict) → human-readable text ──
+            emp_raw = raw.get("employment_status", "")
+            if isinstance(emp_raw, dict):
+                parts = []
+                for key, val in emp_raw.items():
+                    label = {
+                        "status": "Trạng thái thị trường",
+                        "market": "Thị trường",
+                        "demand": "Nhu cầu tuyển dụng",
+                        "details": "Chi tiết",
+                    }.get(key, key.capitalize())
+                    parts.append(f"**{label}:** {val}")
+                vietnam_market_impact_text = "\n".join(parts)
+            elif isinstance(emp_raw, str):
+                vietnam_market_impact_text = emp_raw
+            else:
+                vietnam_market_impact_text = ""
+
+            # Construct and persist ResearchReport with the Vietnamese title (already set in Stage 2)
+            report = ResearchReport(
+                pending_news_id=news.id,
+                title=news.title,
+                original_source=news.url,
+                executive_summary=str(
+                    raw.get("deep_analysis_text", result_data.get("analysis", ""))
+                )[:2000],
+                technical_deep_dive=technical_deep_dive_text or None,
+                vietnam_market_impact=vietnam_market_impact_text or None,
+                strategic_action_items=raw.get("job_details", {}).get("top_roles", []),
+                impact_score=float(raw.get("impact_score", result_data.get("impact_score", 5))),
+                sentiment=raw.get("sentiment", "NEUTRAL"),
+                tags=[
+                    t.get("trend") for t in raw.get("tech_trends", []) if isinstance(t, dict)
+                ],
+                source_citations=source_citations,
+                content_accessible=True,
+                raw_analysis={
+                    **raw,
+                    "source_citations": source_citations,
+                    "content_length_fetched": len(content),
+                    "fetch_method": "jina_reader",
+                },
+            )
+            db.add(report)
+
+            news.status = "PROCESSED"
+            await db.commit()
+
+            logger.info(
+                f"Stage 3: Completed '{news.title[:60]}' — "
+                f"score={report.impact_score} | {len(source_citations)} citations"
+            )
+
+            await notifier.send_strategic_report(
+                title=report.title,
+                url=report.original_source or "",
+                executive_summary=report.executive_summary or "",
+                vietnam_impact=report.vietnam_market_impact or "",
+                action_items=report.strategic_action_items or [],
+                source_citations=source_citations,
+            )
+
+        return result_data

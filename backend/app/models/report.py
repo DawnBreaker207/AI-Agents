@@ -1,24 +1,28 @@
-from sqlalchemy import Column, Integer, Float, Text, String, DateTime, JSON
+from sqlalchemy import Column, Integer, String, Text, Float, DateTime, JSON, ForeignKey, Boolean
 from sqlalchemy.sql import func
 
 from app.database import Base
 
 
-class ResearchReportModel(Base):
+class ResearchReport(Base):
     __tablename__ = "research_reports"
-
     id = Column(Integer, primary_key=True, index=True)
-
-    # Dữ liệu từ Stage 2 & 3
-    title = Column(String(255), nullable=False)
-    impact_score = Column(Float, default=1)  # Điểm ảnh hưởng 1-10
-    tags = Column(JSON, nullable=True)  # Mảng từ khóa [Java, AI...]
-
-    # Dữ liệu từ Stage 4 (Bài viết hoàn chỉnh)
-    content = Column(Text, nullable=False)
-
+    pending_news_id = Column(Integer, ForeignKey("pending_news.id"), nullable=True)
+    title = Column(String(500), nullable=False)
+    original_source = Column(String(1000), nullable=True)  # Original source URL
+    executive_summary = Column(Text, nullable=True)
+    technical_deep_dive = Column(Text, nullable=True)
+    vietnam_market_impact = Column(Text, nullable=True)
+    strategic_action_items = Column(JSON, nullable=True)  # List[str]
+    impact_score = Column(Float, default=5.0)
+    sentiment = Column(String(20), default="NEUTRAL")  # POSITIVE|NEUTRAL|NEGATIVE
+    tags = Column(JSON, nullable=True)
     raw_analysis = Column(JSON, nullable=True)
-
-    # Meta data (Nguồn gốc)
-    source_url = Column(String(500), nullable=True)
+    source_citations = Column(JSON, nullable=True)
+    # List[str] - URLs used as evidence citations within the report
+    # Always contains at least original_source, and optionally extra AI analysis URLs
+    # Example: ["https://techcrunch.com/2026/...", "https://reuters.com/..."]
+    content_accessible = Column(Boolean, default=True)
+    # True  = Jina read original article content - report has real citations
+    # False = Inaccessible URL (skipped, no report is generated)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -21,7 +21,7 @@ class ChatEngine:
             return "Hiện tại hệ thống chưa có dữ liệu báo cáo nào về chủ đề này. Hãy chạy lệnh nghiên cứu trước."
 
         context_text = "\n---\n".join([
-            f"Tiêu đề: {r.title}\n Tóm tắt báo cáo: {r.content}\n Điểm ảnh hưởng (Impact): {r.impact_score}/10"
+            f"Tiêu đề: {r.title}\n Tóm tắt báo cáo: {r.executive_summary or r.technical_deep_dive}\n URL Nguồn: {r.original_source}\n Điểm ảnh hưởng (Impact): {r.impact_score}/10"
             for r in context_reports
         ])
 
@@ -32,7 +32,7 @@ class ChatEngine:
 
         NGUYÊN TẮC:
         1. Tuyệt đối không bịa đặt thông tin (No Hallucination). Nếu dữ liệu không có câu trả lời, hãy nói rõ: "Dữ liệu hiện tại chưa đề cập đến vấn đề này".
-        2. Luôn trích dẫn tên "Tiêu đề" bài báo cáo khi đưa ra dẫn chứng.
+        2. Luôn trích dẫn tên "Tiêu đề" bài báo cáo VÀ BẮT BUỘC KÈM THEO "URL Nguồn" khi đưa ra dẫn chứng để người dùng đọc thêm.
         3. Văn phong: Chuyên nghiệp, ngắn gọn, súc tích (Dùng Markdown).
         """
 
