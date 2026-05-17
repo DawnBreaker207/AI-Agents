@@ -1,4 +1,12 @@
-.react-router
-build
-node_modules
+.react-router/
+build/
+node_modules/
+.git/
+.idea/
+.vscode/
+.env*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
 README.md

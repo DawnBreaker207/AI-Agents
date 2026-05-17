@@ -1,7 +1,7 @@
 import type { Route } from "./+types/feed";
 import { Link, useRevalidator } from "react-router";
 import { useState, useEffect } from "react";
-import { getNewsByStatus, getFeedMetrics, triggerPipeline } from "~/lib/api";
+import { getNewsByStatus, getFeedMetrics, triggerPipeline, API_BASE_URL } from "~/lib/api";
 import { NewsCard } from "~/components/news-card";
 import { cn, relativeTime } from "~/lib/utils";
 import { Rss as RssIcon, Clock as ClockIcon, LayoutGrid, RefreshCcw } from "lucide-react";
@@ -44,7 +44,7 @@ export default function Feed({ loaderData }: Route.ComponentProps) {
     let timeoutId: NodeJS.Timeout;
 
     const connect = () => {
-      sse = new EventSource("http://localhost:8888/api/news/stream");
+      sse = new EventSource(`${API_BASE_URL}/api/news/stream`);
       
       sse.onmessage = (event) => {
         try {

@@ -1,6 +1,6 @@
 import type { ResearchReport, PendingNews, SourceList, TopicWhitelist, FeedMetrics } from "~/types";
 
-const API_BASE_URL = (typeof process !== "undefined" && process.env?.API_BASE_URL)
+export const API_BASE_URL = (typeof process !== "undefined" && process.env?.API_BASE_URL)
   || (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL)
   || "http://localhost:8888";
 

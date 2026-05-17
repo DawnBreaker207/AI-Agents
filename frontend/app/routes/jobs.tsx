@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router";
 import { Search, Briefcase, MapPin, Globe, Building2, ExternalLink } from "lucide-react";
 import type { Route } from "./+types/jobs";
+import { API_BASE_URL } from "~/lib/api";
 
 interface Job {
   id: string;
@@ -46,7 +47,7 @@ export default function JobsPage() {
     try {
       const params = new URLSearchParams({ keyword: kw, location_type: lt, level: lv });
       if (lt === "domestic") params.set("city", ct);
-      const res = await fetch(`http://localhost:8888/api/jobs/search?${params}`);
+      const res = await fetch(`${API_BASE_URL}/api/jobs/search?${params}`);
       if (!res.ok) throw new Error("Lỗi khi tải dữ liệu công việc.");
       const data = await res.json();
       setJobs(data.data || []);

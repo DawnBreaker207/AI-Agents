@@ -9,7 +9,7 @@ import {
   ExternalLink, Globe, RefreshCcw, AlertTriangle,
   BarChart3, Zap, Clock
 } from "lucide-react";
-import { getStrategicReports, getReportHistory, chatWithAgent, getFeedMetrics, triggerPipeline } from "~/lib/api";
+import { getStrategicReports, getReportHistory, chatWithAgent, getFeedMetrics, triggerPipeline, API_BASE_URL } from "~/lib/api";
 import { useState, useEffect } from "react";
 import type { Route } from "./+types/dashboard";
 import type { ResearchReport, FeedMetrics } from "~/types";
@@ -100,7 +100,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 
   // SSE Realtime
   useEffect(() => {
-    const sse = new EventSource("http://localhost:8888/api/news/stream");
+    const sse = new EventSource(`${API_BASE_URL}/api/news/stream`);
     sse.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
