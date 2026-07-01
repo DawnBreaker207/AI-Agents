@@ -8,15 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.brain import BrainService
 from app.core.config import settings
-from app.core.prompt import STAGE3_REACT_PROMPT as STAGE3_DEEP_PROMPT
-from app.models import PendingNews, ResearchReport
-from app.tools.notify import DiscordNotifier
+from app.prompts.stage3_react import STAGE3_REACT_PROMPT as STAGE3_DEEP_PROMPT
+from app.models.news import PendingNews
+from app.models.report import ResearchReport
+from app.services.notify import DiscordNotifier
+from app.utils.helpers import parse_xml_tag
 
 logger = logging.getLogger(__name__)
 
-_MIN_CONTENT_LENGTH = 300
-
-# String matches to identify blocked pages, bad status, or Cloudflare barriers
 _JUNK_CONTENT_SIGNALS = [
     "404", "page not found", "không tìm thấy trang",
     "access denied", "403 forbidden",
@@ -27,7 +26,6 @@ _JUNK_CONTENT_SIGNALS = [
 
 
 async def _fetch_full_content(url: str) -> tuple[str, bool, str]:
-    """Call Jina Reader API to fetch and normalize original URL page content to clean Markdown."""
     jina_url = f"https://r.jina.ai/{url}"
     async with httpx.AsyncClient(timeout=30) as client:
         try:
@@ -41,7 +39,7 @@ async def _fetch_full_content(url: str) -> tuple[str, bool, str]:
 
             content = res.text.strip()
 
-            if len(content) < _MIN_CONTENT_LENGTH:
+            if len(content) < settings.MIN_CONTENT_LENGTH:
                 return "", False, f"Content too short ({len(content)} characters)"
 
             content_lower = content.lower()
@@ -63,7 +61,6 @@ class DeepAnalysisStage:
         self.brain = BrainService()
 
     async def _run_react_loop(self, filtered_signals: list) -> dict:
-        """Run an immutable 5-step ReAct reasoning loop using a high-tier reasoning model."""
         messages = [
             {"role": "system", "content": STAGE3_DEEP_PROMPT},
             {"role": "user", "content": json.dumps(filtered_signals, ensure_ascii=False)},
@@ -71,14 +68,12 @@ class DeepAnalysisStage:
 
         final_result = {"status": "error", "analysis": "ReAct loop failed to complete.", "impact_score": 1}
 
-        for i in range(5):
+        for i in range(settings.REACT_MAX_ITERATIONS):
             response = await self.brain.call_ai_async(messages, model_tier="high")
             messages.append({"role": "assistant", "content": response})
 
-            # Flexibly parse either XML-enclosed tags or raw JSON structures
             parsed = {}
             if "<analysis>" in response:
-                from app.core.utils import parse_xml_tag
                 parsed = parse_xml_tag(response, "analysis")
             else:
                 try:
@@ -89,7 +84,6 @@ class DeepAnalysisStage:
 
             action = parsed.get("action", "")
 
-            # Check if final analysis is reached or successfully outputted
             if "<analysis>" in response or action == "Finalize":
                 raw_json = parsed.get("output", parsed) if action == "Finalize" else parsed
                 final_result = {
@@ -109,7 +103,6 @@ class DeepAnalysisStage:
         return final_result
 
     async def run(self, news_id: int, db: AsyncSession) -> dict:
-        """Orchestrate Stage 3 analysis: fetch content via Jina, run ReAct loop, save findings, and notify Discord."""
         notifier = DiscordNotifier()
 
         result = await db.execute(
@@ -152,24 +145,22 @@ class DeepAnalysisStage:
         if result_data.get("status") == "success":
             raw = result_data.get("raw_json", {})
 
-            # Extract bibliography citations and cap at 10 items
             source_citations = [news.url]
             analysis_text = result_data.get("analysis", "")
-            additional_urls = re.findall(r"https?://[^\s\)\]\>\"\']+" , analysis_text)
+            additional_urls = re.findall(r"https?://[^\s\)\]\>\"\']+", analysis_text)
             for u in additional_urls:
                 u_clean = u.rstrip(".,;:!?")
                 if u_clean not in source_citations:
                     source_citations.append(u_clean)
             source_citations = source_citations[:10]
 
-            # ── Format tech_trends (list[dict]) → human-readable text ──
             tech_trends_raw = raw.get("tech_trends", "")
             if isinstance(tech_trends_raw, list):
                 tech_lines = []
                 for t in tech_trends_raw:
                     if isinstance(t, dict):
                         trend = t.get("trend") or t.get("name") or ""
-                        desc  = t.get("description") or t.get("update") or t.get("details") or ""
+                        desc = t.get("description") or t.get("update") or t.get("details") or ""
                         if trend:
                             tech_lines.append(f"• **{trend}**: {desc}".strip(": "))
                 technical_deep_dive_text = "\n".join(tech_lines) if tech_lines else ""
@@ -178,7 +169,6 @@ class DeepAnalysisStage:
             else:
                 technical_deep_dive_text = ""
 
-            # ── Format employment_status (dict) → human-readable text ──
             emp_raw = raw.get("employment_status", "")
             if isinstance(emp_raw, dict):
                 parts = []
@@ -196,7 +186,6 @@ class DeepAnalysisStage:
             else:
                 vietnam_market_impact_text = ""
 
-            # Construct and persist ResearchReport with the Vietnamese title (already set in Stage 2)
             report = ResearchReport(
                 pending_news_id=news.id,
                 title=news.title,

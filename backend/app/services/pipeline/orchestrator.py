@@ -5,10 +5,11 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
-from app.models import PendingNews
-from app.stages.stage1_scout import ScoutStage
-from app.stages.stage2_filter import GatekeeperStage
-from app.stages.stage3_deep import DeepAnalysisStage
+from app.models.news import PendingNews
+from app.services.pipeline.stage1_scout import ScoutStage
+from app.services.pipeline.stage2_filter import GatekeeperStage
+from app.services.pipeline.stage3_deep import DeepAnalysisStage
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -21,14 +22,11 @@ async def _get_status(news_id: int) -> str:
 
 
 async def run_pipeline():
-    """Coordinate Stage 1 and Stage 2 automatic schedules, then branch Stage 3 jobs."""
     logger.info("Pipeline starting...")
 
-    # Stage 1: Fetch and normalize active feeds
     async with AsyncSessionLocal() as db:
         await ScoutStage().run(db)
 
-    # Stage 2: Filter and score feeds using low-tier model
     async with AsyncSessionLocal() as db:
         all_ids = await GatekeeperStage().run(db)
 
@@ -41,7 +39,6 @@ async def run_pipeline():
         else:
             normal_ids.append(news_id)
 
-    # KEEP_URGENT: Process deep analysis immediately with no delay
     for news_id in urgent_ids:
         try:
             async with AsyncSessionLocal() as db:
@@ -49,21 +46,29 @@ async def run_pipeline():
         except Exception as e:
             logger.error(f"Stage 3 URGENT error [news_id={news_id}]: {e}")
 
-    # KEEP: Process sequentially with a 5-second delay between items to avoid rate limits
     for news_id in normal_ids:
         try:
             async with AsyncSessionLocal() as db:
                 await DeepAnalysisStage().run(news_id, db)
         except Exception as e:
             logger.error(f"Stage 3 error [news_id={news_id}]: {e}")
-        await asyncio.sleep(5)
+        await asyncio.sleep(settings.STAGE3_DELAY_SECONDS)
 
     logger.info("Pipeline completed.")
 
 
 def start_cron_jobs():
-    """Initialize and start the background scheduler running the pipeline every 4 hours."""
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(run_pipeline, "interval", hours=4, id="main_pipeline")
+    scheduler.add_job(
+        run_pipeline, "interval",
+        hours=settings.PIPELINE_INTERVAL_HOURS,
+        id="main_pipeline"
+    )
     scheduler.start()
-    logger.info("Scheduler started: pipeline running every 4 hours.")
+    logger.info(f"Scheduler started: pipeline running every {settings.PIPELINE_INTERVAL_HOURS} hours.")
+
+
+async def execute_workflow(topic: str):
+    logger.info(f"Manual pipeline triggered with topic: {topic}")
+    await run_pipeline()
+    return {"status": "success", "msg": "Pipeline completed."}

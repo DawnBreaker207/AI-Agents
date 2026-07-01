@@ -7,7 +7,6 @@ from app.models.category import TopicWhitelist
 logger = logging.getLogger(__name__)
 
 RSS_SOURCES = [
-    # === AI & CÔNG NGHỆ ===
     {"name": "TechCrunch", "url": "https://techcrunch.com/feed/", "priority_weight": 2.0},
     {"name": "Wired", "url": "https://www.wired.com/feed/rss", "priority_weight": 1.8},
     {"name": "Ars Technica", "url": "https://feeds.arstechnica.com/arstechnica/index", "priority_weight": 1.8},
@@ -16,27 +15,19 @@ RSS_SOURCES = [
     {"name": "MIT Tech Review", "url": "https://www.technologyreview.com/feed/", "priority_weight": 1.9},
     {"name": "IEEE Spectrum", "url": "https://feeds.feedburner.com/IeeeSpectrumFullText", "priority_weight": 1.7},
     {"name": "VentureBeat", "url": "https://venturebeat.com/feed/", "priority_weight": 1.6},
-
-    # === AI RESEARCH LABS ===
     {"name": "Google AI Blog", "url": "https://blog.google/technology/ai/rss/", "priority_weight": 2.0},
     {"name": "Anthropic News", "url": "https://www.anthropic.com/news/rss.xml", "priority_weight": 2.0},
     {"name": "OpenAI Blog", "url": "https://openai.com/blog/rss/", "priority_weight": 2.0},
     {"name": "Hugging Face", "url": "https://huggingface.co/blog/feed.xml", "priority_weight": 1.9},
     {"name": "DeepMind Blog", "url": "https://deepmind.google/blog/rss/", "priority_weight": 1.9},
     {"name": "NVIDIA Dev Blog", "url": "https://developer.nvidia.com/blog//feed", "priority_weight": 1.6},
-
-    # === DEVELOPER & ENGINEERING ===
     {"name": "Hacker News Top", "url": "https://hnrss.org/frontpage?points=100", "priority_weight": 2.0},
     {"name": "GitHub Blog", "url": "https://github.blog/feed/", "priority_weight": 1.6},
     {"name": "InfoQ", "url": "https://feed.infoq.com/", "priority_weight": 1.7},
     {"name": "O'Reilly Radar", "url": "https://feeds.feedburner.com/oreilly/radar", "priority_weight": 1.7},
-
-    # === KINH TẾ, LAYOFF & THỊ TRƯỜNG LAO ĐỘNG ===
     {"name": "Reuters Tech", "url": "https://feeds.reuters.com/reuters/technologyNews", "priority_weight": 1.8},
     {"name": "CNBC Tech", "url": "https://www.cnbc.com/id/19854910/device/rss/rss.html", "priority_weight": 1.7},
     {"name": "Layoffs.fyi", "url": "https://layoffs.fyi/feed/", "priority_weight": 2.0},
-
-    # === JAVA / SPRING BOOT / ANGULAR ===
     {"name": "Spring Blog", "url": "https://spring.io/blog.atom", "priority_weight": 1.9},
     {"name": "Baeldung", "url": "https://www.baeldung.com/feed/", "priority_weight": 1.8},
     {"name": "Angular Blog", "url": "https://blog.angular.io/feed", "priority_weight": 1.9},
@@ -45,13 +36,10 @@ RSS_SOURCES = [
 ]
 
 DEFAULT_WHITELIST = [
-    # force_keep=True: luôn vào Stage 3 dù score < 8
     {"topic": "Java Spring Boot", "boost_score": 2.0, "force_keep": True},
     {"topic": "Angular", "boost_score": 2.0, "force_keep": True},
     {"topic": "Vietnam tech market", "boost_score": 2.0, "force_keep": True},
     {"topic": "thị trường công nghệ VN", "boost_score": 2.0, "force_keep": True},
-
-    # boost_score cao: đẩy score lên nhưng không force
     {"topic": "AI layoff", "boost_score": 1.8, "force_keep": False},
     {"topic": "mass layoff", "boost_score": 1.8, "force_keep": False},
     {"topic": "Anthropic", "boost_score": 1.7, "force_keep": False},
@@ -62,17 +50,13 @@ DEFAULT_WHITELIST = [
 
 
 async def auto_seed_db():
-    """Tự động nạp dữ liệu mẫu nếu DB trống."""
     await init_db()
     async with AsyncSessionLocal() as db:
-        # Kiểm tra xem đã có nguồn nào chưa
         result = await db.execute(select(SourceList).limit(1))
         if result.scalar_one_or_none():
-            return  # Đã có dữ liệu, bỏ qua
+            return
 
         logger.info("Database trống. Bắt đầu tự động nạp (seeding) dữ liệu mẫu...")
-
-        # Seed RSS sources
         for src in RSS_SOURCES:
             db.add(SourceList(
                 name=src["name"],
@@ -81,8 +65,6 @@ async def auto_seed_db():
                 is_active=True,
                 priority_weight=src["priority_weight"],
             ))
-
-        # Seed whitelist topics
         for wl in DEFAULT_WHITELIST:
             db.add(TopicWhitelist(
                 topic=wl["topic"],
@@ -90,6 +72,5 @@ async def auto_seed_db():
                 force_keep=wl["force_keep"],
                 is_active=True,
             ))
-
         await db.commit()
         logger.info(f"Seeding hoàn tất: Đã nạp {len(RSS_SOURCES)} nguồn RSS và {len(DEFAULT_WHITELIST)} từ khóa ưu tiên.")

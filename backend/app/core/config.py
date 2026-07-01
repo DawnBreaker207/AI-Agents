@@ -22,11 +22,25 @@ class Settings(BaseSettings):
     APP_URL: str  = "http://localhost:8000"
     DATA_DIR: str = os.path.join(BASE_DIR, "data")
     WEB_CONTENT_MAX_LENGTH: int = 5000
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
+    ]
 
     # Discord Webhooks
     DISCORD_WEBHOOK_RAW_FEED:          str = ""
     DISCORD_WEBHOOK_MARKET_SIGNALS:    str = ""
     DISCORD_WEBHOOK_STRATEGIC_REPORTS: str = ""
+
+    # Pipeline magic numbers
+    PIPELINE_INTERVAL_HOURS: int = 4
+    GATEKEEPER_BATCH_SIZE: int = 25
+    REACT_MAX_ITERATIONS: int = 5
+    STAGE3_DELAY_SECONDS: int = 5
+    MIN_CONTENT_LENGTH: int = 300
+    SCOUT_TIME_WINDOW_HOURS: int = 72
 
     class Config:
         env_file = ".env"

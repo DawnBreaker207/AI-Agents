@@ -7,9 +7,11 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.utils import normalize_url, extract_domain, clean_html_snippet, is_homepage_path
-from app.models import SourceList, PendingNews
-from app.tools.notify import DiscordNotifier
+from app.utils.helpers import normalize_url, extract_domain, clean_html_snippet, is_homepage_path
+from app.models.source import SourceList
+from app.models.news import PendingNews
+from app.services.notify import DiscordNotifier
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +26,6 @@ _HEAD_TIMEOUT = 10
 
 
 async def _is_article_accessible(url: str, client: httpx.AsyncClient) -> tuple[bool, str]:
-    """
-    Verify real-world link accessibility using a HEAD request.
-    Discards dead links (HTTP >= 400) or redirects to homepages/unrelated domains.
-    """
     try:
         resp = await client.head(
             url,
@@ -41,11 +39,9 @@ async def _is_article_accessible(url: str, client: httpx.AsyncClient) -> tuple[b
         final_url = str(resp.url)
         final_parsed = urlparse(final_url)
 
-        # Drop redirects returning back to the homepage
         if is_homepage_path(final_parsed.path):
             return False, f"Redirected to homepage: {final_url}"
 
-        # Drop redirects pointing to a completely different domain root
         original_domain = extract_domain(url)
         final_domain = extract_domain(final_url)
         if final_domain != original_domain:
@@ -66,8 +62,7 @@ async def _is_article_accessible(url: str, client: httpx.AsyncClient) -> tuple[b
 
 class ScoutStage:
 
-    async def run(self, db: AsyncSession, time_window_hours: int = 72) -> int:
-        """Fetch, normalize, and filter new articles from active RSS sources."""
+    async def run(self, db: AsyncSession, time_window_hours: int | None = None) -> int:
         notifier = DiscordNotifier()
         result = await db.execute(
             select(SourceList).where(SourceList.is_active == True)
@@ -75,17 +70,15 @@ class ScoutStage:
         sources = result.scalars().all()
         new_count = 0
 
-        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=time_window_hours)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(
+            hours=time_window_hours or settings.SCOUT_TIME_WINDOW_HOURS
+        )
 
-        # Share a single HTTP client to leverage connection pooling benefits
         async with httpx.AsyncClient(timeout=_HEAD_TIMEOUT) as client:
             for source in sources:
                 try:
                     feed = feedparser.parse(source.url)
-                    feed_base_url = (
-                            feed.feed.get("link", "")
-                            or source.url
-                    )
+                    feed_base_url = feed.feed.get("link", "") or source.url
 
                     logger.info(
                         f"Scout: Source '{source.name}' — {len(feed.entries)} entries. "
@@ -103,13 +96,11 @@ class ScoutStage:
 
                         normalized_url = normalize_url(raw_url, feed_base_url)
                         if not normalized_url:
-                            logger.debug(f"  [SKIP-INVALID] '{raw_url}'")
                             source_skip_invalid += 1
                             continue
 
                         source_domain = extract_domain(normalized_url)
 
-                        # Filter out old or expired entries based on cutoff window
                         published = None
                         if hasattr(entry, "published_parsed") and entry.published_parsed:
                             pub_tuple = entry.published_parsed

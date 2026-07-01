@@ -5,23 +5,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.brain import BrainService
-from app.core.prompt import STAGE2_FILTER_PROMPT
-from app.models import PendingNews, TopicWhitelist
-from app.tools.notify import DiscordNotifier
+from app.core.config import settings
+from app.prompts.stage2_filter import STAGE2_FILTER_PROMPT
+from app.models.news import PendingNews
+from app.models.category import TopicWhitelist
+from app.services.notify import DiscordNotifier
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
-
-class FilterSignal(BaseModel):
-    id: int
-    title_vi: str = ""
-    impact_score: float = 0.0
-    category: str = "OTHER"
-    matched_topics: list[str] = Field(default_factory=list)
-    reason: str = ""
-
-class FilterResponse(BaseModel):
-    signals: list[FilterSignal]
 
 CRITICAL_KEYWORDS = [
     "mass layoff", "chapter 11", "bankruptcy", "acquisition",
@@ -34,6 +25,19 @@ LAYOFF_KEYWORDS = [
 ]
 
 
+class FilterSignal(BaseModel):
+    id: int
+    title_vi: str = ""
+    impact_score: float = 0.0
+    category: str = "OTHER"
+    matched_topics: list[str] = Field(default_factory=list)
+    reason: str = ""
+
+
+class FilterResponse(BaseModel):
+    signals: list[FilterSignal]
+
+
 class GatekeeperStage:
 
     def __init__(self):
@@ -41,28 +45,24 @@ class GatekeeperStage:
         self.notifier = DiscordNotifier()
 
     async def run(self, db: AsyncSession) -> list[int]:
-        """Fetch pending news, score impact using a low-tier model, and filter entries."""
         result = await db.execute(
-            select(PendingNews).where(PendingNews.status == "PENDING").limit(25)
+            select(PendingNews).where(PendingNews.status == "PENDING").limit(settings.GATEKEEPER_BATCH_SIZE)
         )
         batch = result.scalars().all()
         if not batch:
             logger.info("Gatekeeper: No PENDING articles found.")
             return []
 
-        # Load whitelist topics once beforehand to optimize performance
         wl_result = await db.execute(
             select(TopicWhitelist).where(TopicWhitelist.is_active == True)
         )
         whitelist = wl_result.scalars().all()
 
-        # Send only fundamental metadata to keep token costs to a minimum
         payload = [
             {"id": n.id, "title": n.title, "snippet": (n.snippet or "")[:300]}
             for n in batch
         ]
 
-        # Force a structured JSON schema in the model response
         system_instruction = (
             STAGE2_FILTER_PROMPT
             + "\n\nCRITICAL OVERRIDE: Bạn BẮt BUỘC phải trả về định dạng JSON theo cấu trúc mới sau đây thay vì cấu trúc cũ:\n"
@@ -114,14 +114,13 @@ class GatekeeperStage:
 
             combined = (news.title + " " + (news.snippet or "")).lower()
 
-            # Apply whitelist boosts and limit the maximum score strictly to 10.0
             for wl in whitelist:
                 if wl.topic.lower() in combined:
                     if wl.topic not in matched:
                         matched.append(wl.topic)
                     score = min(score * wl.boost_score, 10.0)
                     if wl.force_keep and score < 8:
-                        score = 8.0  # Elevate automatically to the minimum deep analysis threshold (KEEP)
+                        score = 8.0
 
             is_critical = any(kw in combined for kw in CRITICAL_KEYWORDS)
 
@@ -129,23 +128,19 @@ class GatekeeperStage:
             news.category = category
             news.matched_topics = matched
 
-            # Persist Vietnamese title if provided by AI (fallback to original title)
             title_vi = signal.title_vi.strip()
             if title_vi:
                 news.title = title_vi
 
-            # Categorize the article's pipeline status based on score thresholds
             if score < 5:
                 news.status = "TRASH"
 
             elif score < 8 and not any(
                     wl.force_keep for wl in whitelist if wl.topic.lower() in combined
             ):
-                # WATCH: Informative but below full report requirements
                 news.status = "WATCH"
 
             elif score >= 10 or (score >= 8 and is_critical):
-                # KEEP_URGENT: Trigger immediate analysis bypass
                 news.status = "KEEP_URGENT"
                 urgent_ids.insert(0, news_id)
 
@@ -156,7 +151,6 @@ class GatekeeperStage:
                     )
 
             else:
-                # KEEP: Queue for sequential deep analysis (Stage 3)
                 news.status = "KEEP"
                 keep_ids.append(news_id)
 
@@ -170,7 +164,7 @@ class GatekeeperStage:
         if urgent_ids or keep_ids:
             from app.core.events import news_broadcaster
             news_broadcaster.broadcast({"type": "new_news"})
-            
+
         logger.info(
             f"Gatekeeper: {len(urgent_ids)} KEEP_URGENT, "
             f"{len(keep_ids)} KEEP, triggering Stage 3."
