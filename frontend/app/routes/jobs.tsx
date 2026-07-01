@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router";
 import { Search, Briefcase, MapPin, Globe, Building2, ExternalLink } from "lucide-react";
 import type { Route } from "./+types/jobs";
-import { API_BASE_URL } from "~/lib/api";
+import { searchJobs } from "~/lib/api";
 
 interface Job {
   id: string;
@@ -45,12 +45,8 @@ export default function JobsPage() {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ keyword: kw, location_type: lt, level: lv });
-      if (lt === "domestic") params.set("city", ct);
-      const res = await fetch(`${API_BASE_URL}/api/jobs/search?${params}`);
-      if (!res.ok) throw new Error("Lỗi khi tải dữ liệu công việc.");
-      const data = await res.json();
-      setJobs(data.data || []);
+      const data = await searchJobs(kw, lt, lv, ct);
+      setJobs(data);
     } catch (err: any) {
       setError(err.message || "Đã xảy ra lỗi.");
     } finally {
@@ -67,13 +63,13 @@ export default function JobsPage() {
   return (
     <div className="flex flex-col gap-6 w-full h-full pb-10">
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold tracking-tight">Tìm Kiếm Việc Làm</h1>
+        <h1 className="text-2xl font-medium tracking-tight">Tìm Kiếm Việc Làm</h1>
         <p className="text-sm text-muted-foreground">
           Khám phá cơ hội nghề nghiệp từ các nguồn uy tín. Hỗ trợ tìm việc trực tiếp trong nước và việc làm từ xa quốc tế.
         </p>
       </div>
 
-      <div className="bg-card border border-border/50 rounded-xl p-5 shadow-sm">
+      <div className="bg-card border border-border/50 rounded-xl p-5">
         <form onSubmit={handleSearch} className="flex flex-col gap-4">
           <div className="flex flex-col xl:flex-row gap-4 items-end">
             
@@ -111,7 +107,7 @@ export default function JobsPage() {
                   type="button"
                   onClick={() => setLocationType("domestic")}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-all ${
-                    locationType === "domestic" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-secondary/50"
+                    locationType === "domestic" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary/50"
                   }`}
                 >
                   <MapPin className="w-3.5 h-3.5" />
@@ -121,7 +117,7 @@ export default function JobsPage() {
                   type="button"
                   onClick={() => setLocationType("overseas")}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-all ${
-                    locationType === "overseas" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-secondary/50"
+                    locationType === "overseas" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary/50"
                   }`}
                 >
                   <Globe className="w-3.5 h-3.5" />
@@ -170,9 +166,9 @@ export default function JobsPage() {
       {jobs.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
           {jobs.map((job) => (
-            <div key={job.id} className="group bg-card border border-border/50 hover:border-primary/30 rounded-xl p-5 transition-all hover:shadow-md flex flex-col h-full overflow-hidden">
+            <div key={job.id} className="group bg-card border border-border/50 hover:border-primary/30 rounded-xl p-5 transition-all hover:bg-muted/20 flex flex-col h-full overflow-hidden">
               <div className="flex items-start justify-between gap-3 mb-3 w-full">
-                <h3 className="font-semibold text-[15px] leading-tight group-hover:text-primary transition-colors line-clamp-2 flex-1 min-w-0">
+                <h3 className="font-medium text-[15px] leading-tight group-hover:text-primary transition-colors line-clamp-2 flex-1 min-w-0">
                   <a href={job.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 hover:underline" title={job.title}>
                     <span className="truncate whitespace-normal line-clamp-2">{job.title}</span>
                     <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 inline-block" />
@@ -198,10 +194,7 @@ export default function JobsPage() {
                 </div>
               </div>
               
-              <div 
-                className="text-[13px] text-muted-foreground leading-relaxed line-clamp-3 mb-4 flex-1 break-words"
-                dangerouslySetInnerHTML={{ __html: job.description }}
-              />
+              <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-3 mb-4 flex-1 break-words">{job.description}</p>
 
               {job.posted_at && (
                 <div className="text-[11px] text-muted-foreground/60 mt-auto pt-4 border-t border-border/30">

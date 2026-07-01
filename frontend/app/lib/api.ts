@@ -10,27 +10,33 @@ interface ApiResponse<T> {
   timestamp: string;
 }
 
+const REQUEST_TIMEOUT = 15_000;
+
 /**
- * Generic fetch wrapper that robustly handles both unified APIResponse structures (unwrapping data)
- * and raw lists/objects returned directly from the backend.
+ * Generic fetch wrapper with timeout, auto-unwraps APIResponse envelope.
  */
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
-  const res = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
-    ...init,
-  });
-  if (!res.ok) {
-    console.error(`❌ API Error: ${res.status} - ${url}`);
-    throw new Error(`API error ${res.status}: ${url}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json", ...init?.headers },
+      ...init,
+    });
+    if (!res.ok) {
+      console.error(`API Error: ${res.status} - ${url}`);
+      throw new Error(`API error ${res.status}: ${url}`);
+    }
+    const json = await res.json();
+    if (json && typeof json === "object" && "data" in json && "message" in json) {
+      return json.data as T;
+    }
+    return json as T;
+  } finally {
+    clearTimeout(timer);
   }
-  const json = await res.json();
-  
-  // Unbox if the response conforms to standard APIResponse wrapping
-  if (json && typeof json === "object" && "data" in json && "message" in json) {
-    return json.data as T;
-  }
-  return json as T;
 }
 
 /**

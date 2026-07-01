@@ -74,7 +74,7 @@ export default function JobWatchWidget() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Briefcase className="w-4 h-4 text-primary" />
-          <h2 className="text-sm font-bold text-foreground">Vị trí Việc làm Quan tâm</h2>
+          <h2 className="text-sm font-medium text-foreground">Vị trí việc làm quan tâm</h2>
         </div>
         <button
           onClick={() => setShowAdd(v => !v)}
@@ -158,7 +158,7 @@ export default function JobWatchWidget() {
               }`}
             >
               <div className="flex-1 min-w-0">
-                <p className="font-semibold truncate">{w.position}</p>
+                <p className="font-medium truncate">{w.position}</p>
                 <p className="text-muted-foreground text-[10px] flex items-center gap-1">
                   {w.location_type === "domestic" ? <MapPin className="w-2.5 h-2.5 shrink-0" /> : <Globe className="w-2.5 h-2.5 shrink-0" />}
                   {w.level !== "Tất cả" ? `${w.level} · ` : ""}{w.location_type === "domestic" ? (w.city !== "Tất cả" ? w.city : "Việt Nam") : "Remote"}
@@ -186,7 +186,7 @@ export default function JobWatchWidget() {
         {activeWatch && (
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-3">
-              <p className="text-[12px] font-bold text-foreground">
+              <p className="text-[12px] font-medium text-foreground">
                 Kết quả cho <span className="text-primary">{activeWatch.position}</span>
                 {activeWatch.level !== "Tất cả" && <span className="text-muted-foreground"> · {activeWatch.level}</span>}
               </p>
@@ -204,10 +204,10 @@ export default function JobWatchWidget() {
                   href={job.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="group block bg-card border border-border/50 hover:border-primary/30 rounded-xl p-3.5 transition-all hover:shadow-sm"
+                  className="group block bg-card border border-border/50 hover:border-primary/30 rounded-xl p-3.5 transition-all hover:bg-muted/20"
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <p className="text-[13px] font-semibold leading-snug group-hover:text-primary transition-colors line-clamp-2 flex-1">
+                    <p className="text-[13px] font-medium leading-snug group-hover:text-primary transition-colors line-clamp-2 flex-1">
                       {job.title}
                     </p>
                     <span className="shrink-0 text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-secondary/50 text-muted-foreground border border-border/50 whitespace-nowrap">

@@ -5,8 +5,8 @@ import { ScrollArea } from "~/components/ui/scroll-area";
 import { Badge } from "~/components/ui/badge";
 import {
   Activity, Briefcase, Cpu, MessageSquare, Microscope,
-  Send, X, TrendingUp, TrendingDown, Minus,
-  ExternalLink, Globe, RefreshCcw, AlertTriangle,
+  Send, X,
+  ExternalLink, RefreshCcw, AlertTriangle,
   BarChart3, Zap, Clock
 } from "lucide-react";
 import { getStrategicReports, getReportHistory, chatWithAgent, getFeedMetrics, triggerPipeline, API_BASE_URL } from "~/lib/api";
@@ -14,6 +14,8 @@ import { useState, useEffect } from "react";
 import type { Route } from "./+types/dashboard";
 import type { ResearchReport, FeedMetrics } from "~/types";
 import { relativeTime } from "~/lib/utils";
+import { getSentimentConfig, SENTIMENT_BORDER } from "~/lib/constants";
+import { ReportColumn } from "~/components/ReportColumn";
 import JobWatchWidget from "~/components/JobWatchWidget";
 
 export const meta: Route.MetaFunction = () => [
@@ -73,19 +75,6 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   return {};
-}
-
-const SENTIMENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
-  POSITIVE:   { label: "Tích cực", icon: <TrendingUp className="w-3 h-3" />,   cls: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800/40" },
-  NEUTRAL:    { label: "Trung tính", icon: <Minus className="w-3 h-3" />,       cls: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/40" },
-  NEGATIVE:   { label: "Tiêu cực", icon: <TrendingDown className="w-3 h-3" />, cls: "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800/40" },
-  "Tích cực": { label: "Tích cực", icon: <TrendingUp className="w-3 h-3" />,   cls: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/40" },
-  "Trung tính":{ label: "Trung tính",icon: <Minus className="w-3 h-3" />,      cls: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40" },
-  "Tiêu cực": { label: "Tiêu cực", icon: <TrendingDown className="w-3 h-3" />, cls: "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40" },
-};
-
-function getSentimentConfig(s: string) {
-  return SENTIMENT_CONFIG[s] ?? { label: s, icon: <Minus className="w-3 h-3" />, cls: "bg-muted text-muted-foreground" };
 }
 
 export default function Dashboard({ loaderData }: Route.ComponentProps) {
@@ -150,17 +139,15 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
   const urgentCount = metrics.keep_urgent;
 
   return (
-    <div className="flex flex-col min-h-full gap-8 pb-10 animate-in fade-in duration-500">
+    <div className="flex flex-col min-h-full gap-6 pb-10 animate-in fade-in duration-500">
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-primary/10 border border-primary/20">
-              <BarChart3 className="w-5 h-5 text-primary" />
-            </div>
+          <h1 className="text-lg font-medium text-foreground tracking-tight flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-muted-foreground" />
             Tổng quan thị trường
           </h1>
-          <p className="text-[13px] text-muted-foreground mt-1">
+          <p className="text-[12px] text-muted-foreground mt-0.5">
             Bảng điều khiển thông tin thị trường cá nhân — Cập nhật realtime bởi AI Agent
           </p>
         </div>
@@ -178,7 +165,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
           <button
             onClick={handleTrigger}
             disabled={isTriggering}
-            className="flex items-center gap-1.5 text-[12px] font-medium border border-border/60 rounded-full px-3 py-1.5 text-foreground bg-background hover:bg-secondary/60 disabled:opacity-50 transition-all cursor-pointer shadow-sm"
+            className="flex items-center gap-1.5 text-[12px] font-medium border border-border/60 rounded-full px-3 py-1.5 text-foreground bg-background hover:bg-secondary/60 disabled:opacity-50 transition-all cursor-pointer"
           >
             <RefreshCcw className={`w-3.5 h-3.5 ${isTriggering ? "animate-spin" : ""}`} />
             {isTriggering ? "Đang quét..." : "Lấy tin ngay"}
@@ -186,19 +173,22 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         {[
-          { label: "Tin thu thập", value: metrics.total_today, cls: "text-foreground", sub: "bài hôm nay" },
-          { label: "🔥 Tín hiệu nóng", value: metrics.keep_urgent, cls: "text-destructive font-black", sub: "cần đọc ngay" },
-          { label: "📰 Đã lọc", value: metrics.keep, cls: "text-green-600 dark:text-green-400 font-black", sub: "tin chất lượng" },
-          { label: "👀 Theo dõi", value: metrics.watch, cls: "text-amber-500 font-black", sub: "đang watch" },
-          { label: "✅ Đã xử lý", value: metrics.processed, cls: "text-blue-600 dark:text-blue-400 font-black", sub: "báo cáo AI" },
-          { label: "🗑️ Đã lọc bỏ", value: metrics.trash, cls: "text-muted-foreground", sub: "tin rác" },
-        ].map(({ label, value, cls, sub }) => (
-          <div key={label} className="bg-background border border-border/50 rounded-xl px-4 py-3.5 flex flex-col gap-1 hover:border-border transition-colors">
-            <p className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-widest leading-none">{label}</p>
-            <p className={`text-2xl tabular-nums leading-none mt-1 ${cls}`}>{value}</p>
-            <p className="text-[11px] text-muted-foreground/50">{sub}</p>
+          { label: "Tin thu thập", value: metrics.total_today, cls: "text-foreground", sub: "bài hôm nay", icon: Activity },
+          { label: "Tín hiệu nóng", value: metrics.keep_urgent, cls: "text-destructive", sub: "cần đọc ngay", icon: AlertTriangle },
+          { label: "Đã lọc", value: metrics.keep, cls: "text-green-600 dark:text-green-400", sub: "tin chất lượng", icon: Zap },
+          { label: "Theo dõi", value: metrics.watch, cls: "text-amber-600 dark:text-amber-400", sub: "đang theo dõi", icon: BarChart3 },
+          { label: "Đã xử lý", value: metrics.processed, cls: "text-blue-600 dark:text-blue-400", sub: "báo cáo AI", icon: Activity },
+          { label: "Đã lọc bỏ", value: metrics.trash, cls: "text-muted-foreground/60", sub: "tin rác", icon: BarChart3 },
+        ].map(({ label, value, cls, sub, icon: Icon }) => (
+          <div key={label} className="group bg-background border border-border/50 rounded-lg px-3.5 py-3 flex flex-col gap-1 hover:border-border/80 hover:bg-muted/20 transition-all hover:scale-[1.02] cursor-default">
+            <div className="flex items-center gap-1.5">
+              <Icon className="w-3 h-3 text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors" />
+              <p className="text-[11px] text-muted-foreground tracking-wide leading-none">{label}</p>
+            </div>
+            <p className={`text-2xl font-medium leading-none mt-1 tabular-nums ${cls}`}>{value}</p>
+            <p className="text-[11px] text-muted-foreground/60">{sub}</p>
           </div>
         ))}
       </div>
@@ -212,7 +202,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
             <AlertTriangle className="w-5 h-5 text-destructive animate-pulse" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-bold text-destructive">
+            <p className="text-sm font-medium text-destructive">
               {urgentCount} tín hiệu thị trường quan trọng cần đọc ngay!
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -225,8 +215,8 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
 
       <div>
         <div className="flex items-center gap-2 mb-4">
-          <Zap className="w-4 h-4 text-primary" />
-          <h2 className="text-sm font-bold text-foreground">Luồng Báo Cáo Chiến Lược</h2>
+          <Zap className="w-4 h-4 text-muted-foreground" />
+          <h2 className="text-[13px] font-medium text-foreground">Luồng Báo Cáo Chiến Lược</h2>
           <Badge variant="outline" className="text-[10px] font-mono ml-auto">{reports.length} báo cáo (có dẫn chứng)</Badge>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -246,7 +236,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
         {isAssistantOpen ? (
           <div className="w-[360px] h-[500px] shadow-2xl flex flex-col rounded-2xl overflow-hidden border border-border bg-background animate-in slide-in-from-bottom-5 duration-300">
             <header className="p-4 border-b bg-primary text-primary-foreground flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide">
                 <MessageSquare className="w-4 h-4" />
                 Maestro AI Analyst
               </div>
@@ -293,102 +283,3 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
   );
 }
 
-// ── Report Column Component ──
-interface ReportColumnProps {
-  title: string;
-  icon: React.ReactNode;
-  color: string;
-  items: ResearchReport[];
-}
-
-function ReportColumn({ title, icon, color, items }: ReportColumnProps) {
-  const colorBorder: Record<string, string> = {
-    blue: "border-blue-200 dark:border-blue-800/30",
-    emerald: "border-emerald-200 dark:border-emerald-800/30",
-    orange: "border-orange-200 dark:border-orange-800/30",
-    indigo: "border-indigo-200 dark:border-indigo-800/30",
-  };
-
-  return (
-    <div className={`flex flex-col border border-border/50 rounded-xl overflow-hidden bg-card/30`}>
-      <div className={`flex items-center gap-2 px-4 py-3 border-b ${colorBorder[color] || "border-border/50"} bg-muted/20 shrink-0`}>
-        {icon}
-        <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{title}</h3>
-        <Badge variant="outline" className="ml-auto text-[9px] font-mono">{items.length}</Badge>
-      </div>
-      <div className="flex flex-col divide-y divide-border/40 overflow-y-auto max-h-[480px]">
-        {items.length === 0 && (
-          <div className="py-12 text-center text-xs text-muted-foreground/40 italic">
-            Chưa có báo cáo
-          </div>
-        )}
-        {items.map(item => {
-          const sent = getSentimentConfig(item.sentiment as string);
-          const sourceUrl = item.original_source
-            || item.source_citations?.[0]
-            || item.sources?.[0];
-
-          return (
-            <div key={item.id} className="p-4 hover:bg-muted/20 transition-colors flex flex-col gap-2.5">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${sent.cls}`}>
-                  {sent.icon}{sent.label}
-                </span>
-                <span className="text-[10px] text-muted-foreground/50 tabular-nums ml-auto">
-                  {relativeTime(item.created_at)}
-                </span>
-              </div>
-
-              {/* Title — MUST link to source */}
-              {sourceUrl ? (
-                <a
-                  href={sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[13px] font-bold text-foreground leading-snug hover:text-primary transition-colors line-clamp-2 flex items-start gap-1 group"
-                >
-                  <span>{item.title}</span>
-                  <Globe className="w-3 h-3 text-muted-foreground/40 group-hover:text-primary shrink-0 mt-0.5 transition-colors" />
-                </a>
-              ) : (
-                <p className="text-[13px] font-bold text-foreground/50 line-clamp-2 italic">
-                  {item.title}
-                  <span className="text-[10px] text-destructive/60 ml-1 font-normal">(thiếu nguồn)</span>
-                </p>
-              )}
-
-              {/* Summary */}
-              {(item.executive_summary || item.summary) && (
-                <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-3 border-l-2 border-border/50 pl-2">
-                  {item.executive_summary || item.summary}
-                </p>
-              )}
-
-              {/* Footer: citation count + detail link */}
-              <div className="flex items-center justify-between pt-0.5">
-                {item.source_citations && item.source_citations.length > 0 ? (
-                  <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
-                    <Globe className="w-3 h-3" />
-                    {item.source_citations.length} nguồn dẫn chứng
-                  </span>
-                ) : sourceUrl ? (
-                  <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
-                    <Globe className="w-3 h-3" />1 nguồn gốc
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-destructive/60">⚠ Chưa có dẫn chứng</span>
-                )}
-                <Link
-                  to={`/reports/${item.id}`}
-                  className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5 uppercase tracking-wide"
-                >
-                  Phân tích <ExternalLink className="w-3 h-3" />
-                </Link>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}

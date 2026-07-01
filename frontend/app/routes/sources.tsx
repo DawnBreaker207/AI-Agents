@@ -9,7 +9,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
-import { Radio, Power, PowerOff, ShieldAlert, Plus, Trash2, Settings } from "lucide-react";
+import { Radio, Power, PowerOff, ShieldAlert, Plus, Trash2, Settings, Circle } from "lucide-react";
 import { useRef, useEffect } from "react";
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -71,16 +71,16 @@ export default function SourcesPage({ loaderData }: Route.ComponentProps) {
 
   const renderTable = (list: typeof sources, title: string, isActive: boolean) => (
     <div className="space-y-4">
-      <h3 className="text-sm font-bold flex items-center gap-2 uppercase tracking-wider text-muted-foreground">
+      <h3 className="text-[13px] font-medium flex items-center gap-2 text-muted-foreground">
         {isActive ? (
-          <Power size={14} className="text-green-500" />
+          <Power className="w-3.5 h-3.5 text-green-500" />
         ) : (
-          <PowerOff size={14} className="text-muted-foreground/60" />
+          <PowerOff className="w-3.5 h-3.5 text-muted-foreground/60" />
         )}
         {title}
-        <Badge variant="secondary" className="ml-2 font-mono">{list.length}</Badge>
+        <span className="text-[11px] text-muted-foreground/60 ml-auto tabular-nums">{list.length}</span>
       </h3>
-      <div className="border rounded-xl overflow-hidden bg-card/40 backdrop-blur-sm">
+      <div className="border rounded-xl overflow-hidden bg-card/40">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/20">
@@ -99,10 +99,15 @@ export default function SourcesPage({ loaderData }: Route.ComponentProps) {
                 <TableRow key={source.id} className="group hover:bg-muted/10 transition-colors">
                   <TableCell>
                     <div className={`h-2 w-2 rounded-full mx-auto transition-colors ${
-                      source.is_active ? 'bg-green-500 shadow-[0_0_6px_#22c55e]' : 'bg-muted-foreground/30'
+                      source.is_active ? 'bg-green-500' : 'bg-muted-foreground/30'
                     }`} />
                   </TableCell>
-                  <TableCell className="font-semibold text-xs">{source.name}</TableCell>
+                  <TableCell className="font-medium text-xs">
+                    <span className="flex items-center gap-2">
+                      <Circle className={`w-2 h-2 fill-current ${source.type === "RSS" ? "text-green-500" : "text-blue-500"}`} />
+                      {source.name}
+                    </span>
+                  </TableCell>
                   <TableCell className="hidden md:table-cell">
                     <a
                       href={source.url}
@@ -130,7 +135,7 @@ export default function SourcesPage({ loaderData }: Route.ComponentProps) {
                         variant={source.is_active ? "outline" : "default"}
                         size="sm"
                         disabled={isSubmitting}
-                        className="text-[9px] font-black uppercase tracking-wider h-7 px-3.5"
+                        className="text-[9px] font-medium uppercase tracking-wider h-7 px-3.5"
                       >
                         {isThisSubmitting
                           ? "..."
@@ -160,19 +165,13 @@ export default function SourcesPage({ loaderData }: Route.ComponentProps) {
       {/* ── HEADER ── */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6 border-border/50">
         <div className="space-y-1">
-          <h2 className="text-3xl font-black italic uppercase tracking-tight flex items-center gap-3">
-            <div className="p-2 bg-primary rounded-lg shadow-xl shadow-primary/20">
-              <Settings className="text-primary-foreground" size={22} />
-            </div>
-            System Control Center
+          <h2 className="text-lg font-medium text-foreground tracking-tight flex items-center gap-2">
+            <Settings className="w-4 h-4 text-muted-foreground" />
+            Quản lý nguồn tin
           </h2>
-          <p className="text-muted-foreground text-sm font-medium italic">
-            Quản lý Whitelist Topics và các nguồn dữ liệu RSS/Scraping của AI Agent.
+          <p className="text-[12px] text-muted-foreground">
+            Quản lý whitelist topics và các nguồn dữ liệu RSS.
           </p>
-        </div>
-        <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground uppercase tracking-widest bg-muted/40 px-3 py-1.5 rounded-lg border">
-          <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_6px_#10b981]" />
-          Control_Registry: OK
         </div>
       </div>
 
@@ -180,10 +179,10 @@ export default function SourcesPage({ loaderData }: Route.ComponentProps) {
         
         {/* ── WHITELIST MANAGEMENT (2 COLUMNS) ── */}
         <div className="lg:col-span-2 space-y-6">
-          <Card className="border shadow-lg rounded-2xl overflow-hidden bg-card/60 backdrop-blur-sm">
-            <CardHeader className="border-b bg-muted/20">
-              <CardTitle className="text-sm font-black uppercase tracking-wider flex items-center gap-2 text-primary">
-                <ShieldAlert size={16} /> AI Whitelist Topics
+          <Card className="border border-border/50 rounded-xl overflow-hidden">
+            <CardHeader className="border-b border-border/50">
+              <CardTitle className="text-[13px] font-medium tracking-tight flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-muted-foreground" /> AI Whitelist Topics
               </CardTitle>
               <CardDescription className="text-xs italic">
                 Các từ khóa ưu tiên bắt buộc giữ lại (Force Keep) hoặc tăng điểm số (Boost Score) khi AI lọc tin.
@@ -195,18 +194,18 @@ export default function SourcesPage({ loaderData }: Route.ComponentProps) {
               <Form ref={addFormRef} method="post" className="flex flex-wrap gap-4 items-end bg-muted/10 p-4 rounded-xl border">
                 <input type="hidden" name="intent" value="add-whitelist" />
                 <div className="flex-1 min-w-[200px] space-y-1.5">
-                  <label className="text-[9px] font-black uppercase tracking-wider text-muted-foreground block">Tên Topic / Từ khóa</label>
+                  <label className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground block">Tên Topic / Từ khóa</label>
                   <Input name="topic" required placeholder="Ví dụ: ChatGPT, Nvidia, VinFast..." className="h-9 text-xs bg-background" />
                 </div>
                 <div className="w-24 space-y-1.5">
-                  <label className="text-[9px] font-black uppercase tracking-wider text-muted-foreground block">Boost Score</label>
+                  <label className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground block">Boost Score</label>
                   <Input name="boost_score" type="number" step="0.1" defaultValue="1.5" className="h-9 text-xs font-mono bg-background text-center" />
                 </div>
                 <div className="flex items-center gap-2 pb-2">
                   <input type="checkbox" id="force_keep" name="force_keep" defaultChecked className="rounded border-input text-primary focus:ring-primary h-4 w-4 bg-background cursor-pointer" />
-                  <label htmlFor="force_keep" className="text-[10px] font-bold uppercase tracking-wider cursor-pointer select-none">Force Keep</label>
+                  <label htmlFor="force_keep" className="text-[10px] font-medium uppercase tracking-wider cursor-pointer select-none">Force Keep</label>
                 </div>
-                <Button type="submit" disabled={isSubmitting} size="sm" className="h-9 px-4 font-black text-xs uppercase tracking-wider gap-1">
+                <Button type="submit" disabled={isSubmitting} size="sm" className="h-9 px-4 font-medium text-xs uppercase tracking-wider gap-1">
                   <Plus size={14} /> Thêm
                 </Button>
               </Form>
@@ -225,12 +224,12 @@ export default function SourcesPage({ loaderData }: Route.ComponentProps) {
                   <TableBody>
                     {whitelist.map(topic => (
                       <TableRow key={topic.id} className="hover:bg-muted/5 transition-colors">
-                        <TableCell className="font-bold text-xs">{topic.topic}</TableCell>
-                        <TableCell className="text-center font-mono text-xs text-orange-500 font-semibold">
+                        <TableCell className="font-medium text-xs">{topic.topic}</TableCell>
+                        <TableCell className="text-center font-mono text-xs text-orange-500 font-medium">
                           x{topic.boost_score}
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge variant={topic.force_keep ? "default" : "outline"} className="text-[9px] font-black uppercase px-2 py-0">
+                          <Badge variant={topic.force_keep ? "default" : "outline"} className="text-[9px] font-medium uppercase px-2 py-0">
                             {topic.force_keep ? "BẮT BUỘC" : "TÙY CHỌN"}
                           </Badge>
                         </TableCell>
@@ -268,10 +267,10 @@ export default function SourcesPage({ loaderData }: Route.ComponentProps) {
 
         {/* ── RSS SOURCES (1 COLUMN) ── */}
         <div className="space-y-6">
-          <Card className="border shadow-lg rounded-2xl overflow-hidden bg-card/60 backdrop-blur-sm h-full">
-            <CardHeader className="border-b bg-muted/20">
-              <CardTitle className="text-sm font-black uppercase tracking-wider flex items-center gap-2 text-primary">
-                <Radio size={16} /> RSS & Scraping Sources
+          <Card className="border border-border/50 rounded-xl overflow-hidden h-full">
+            <CardHeader className="border-b border-border/50">
+              <CardTitle className="text-[13px] font-medium tracking-tight flex items-center gap-2">
+                <Radio className="w-4 h-4 text-muted-foreground" /> RSS Sources
               </CardTitle>
               <CardDescription className="text-xs italic">
                 Các đầu mối thu thập dữ liệu RSS hoạt động trong hệ thống.

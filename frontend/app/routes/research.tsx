@@ -50,21 +50,17 @@ export default function ResearchCenter() {
 
       {/* ── HEADER ── */}
       <div className="flex flex-col gap-3 pt-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-primary/10 border border-primary/20 rounded-2xl">
-            <Microscope className="w-6 h-6 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-black tracking-tight text-foreground">Nghiên cứu Chuyên sâu</h1>
-            <p className="text-[13px] text-muted-foreground">AI Agent sẽ quét, tổng hợp và phân tích đa nguồn theo yêu cầu của bạn</p>
-          </div>
+        <div className="flex items-center gap-2">
+          <Microscope className="w-4 h-4 text-muted-foreground" />
+          <h1 className="text-lg font-medium text-foreground tracking-tight">Nghiên cứu chuyên sâu</h1>
         </div>
+        <p className="text-[12px] text-muted-foreground">AI Agent sẽ quét, tổng hợp và phân tích đa nguồn theo yêu cầu của bạn</p>
 
         {/* How it works */}
         <div className="flex items-start gap-3 p-4 bg-secondary/30 rounded-xl border border-border/50 mt-2">
           <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="text-[12px] font-semibold text-foreground">Cách hoạt động</p>
+            <p className="text-[12px] font-medium text-foreground">Cách hoạt động</p>
             <p className="text-[12px] text-muted-foreground leading-relaxed">
               Nhập chủ đề bất kỳ → AI Agent thu thập nội dung từ nhiều nguồn báo uy tín (TechCrunch, The Verge, CNBC...) → Phân tích chuyên sâu bằng ReAct Loop → Sinh báo cáo có dẫn chứng link gốc cụ thể → Lưu vào thư viện báo cáo.
             </p>
@@ -73,10 +69,10 @@ export default function ResearchCenter() {
       </div>
 
       {/* ── MAIN FORM ── */}
-      <div className="bg-background border border-border/60 rounded-2xl overflow-hidden shadow-sm">
-        <div className="px-6 py-4 border-b border-border/50 flex items-center gap-3">
-          <Zap className="w-4 h-4 text-primary" />
-          <h2 className="text-[13px] font-bold text-foreground uppercase tracking-wide">Chủ đề Nghiên cứu</h2>
+      <div className="bg-background border border-border/50 rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-border/50 flex items-center gap-2">
+          <Zap className="w-4 h-4 text-muted-foreground" />
+          <h2 className="text-[13px] font-medium text-foreground tracking-tight">Chủ đề nghiên cứu</h2>
           <Badge variant="outline" className="text-[9px] font-mono ml-auto">ReAct Engine v1.5</Badge>
         </div>
 
@@ -97,7 +93,7 @@ export default function ResearchCenter() {
 
           {/* Example topics */}
           <div className="flex flex-col gap-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Gợi ý chủ đề</p>
+            <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">Gợi ý chủ đề</p>
             <div className="flex flex-wrap gap-2">
               {EXAMPLE_TOPICS.map(t => (
                 <button
@@ -120,7 +116,7 @@ export default function ResearchCenter() {
           <Button
             type="submit"
             disabled={isRunning}
-            className="h-12 gap-3 font-bold text-sm tracking-wide"
+            className="h-12 gap-3 font-medium text-sm tracking-wide"
             size="lg"
           >
             {isRunning ? (
@@ -137,7 +133,7 @@ export default function ResearchCenter() {
         {/* Trace Log */}
         <div className="bg-background border border-border/50 rounded-2xl overflow-hidden">
           <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
+            <div className="flex items-center gap-2 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
               <Terminal className="w-3.5 h-3.5" />
               System Trace Log
             </div>
@@ -145,21 +141,16 @@ export default function ResearchCenter() {
           </div>
           <div className="p-4 font-mono text-[11px] leading-relaxed h-48 overflow-y-auto space-y-1.5">
             {isRunning ? (
-              <>
-                <p className="text-emerald-500">[{new Date().toLocaleTimeString()}] Maestro Orchestrator → initialized</p>
-                <p className="text-emerald-400">[{new Date().toLocaleTimeString()}] Stage 1: Scout — fetching RSS sources...</p>
-                <p className="text-emerald-300">[{new Date().toLocaleTimeString()}] Stage 2: Gatekeeper — filtering signals...</p>
-                <p className="text-blue-400 animate-pulse">[{new Date().toLocaleTimeString()}] Stage 3: DeepAnalysis — ReAct Loop running...</p>
-              </>
+              <p className="text-blue-400 animate-pulse">Request sent — pipeline is running in background...</p>
             ) : result?.success ? (
               <>
-                <p className="text-blue-400 font-bold">[{new Date().toLocaleTimeString()}] COMPLETED ✓</p>
+                <p className="text-blue-400 font-medium">[{new Date().toLocaleTimeString()}] COMPLETED ✓</p>
                 <p className="text-muted-foreground">Topic: "{result.report.topic}"</p>
                 <p className="text-muted-foreground">Status: {result.report.status}</p>
                 <p className="text-emerald-400 mt-2">→ Báo cáo đang được lưu vào thư viện...</p>
               </>
             ) : result?.success === false ? (
-              <p className="text-destructive font-bold">[ERROR] {result.error}</p>
+              <p className="text-destructive font-medium">[ERROR] {result.error}</p>
             ) : (
               <p className="text-muted-foreground/30 italic">Awaiting research command...</p>
             )}
@@ -174,7 +165,7 @@ export default function ResearchCenter() {
                 <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div>
-                <h3 className="font-bold text-sm text-foreground">Đang xử lý!</h3>
+                <h3 className="font-medium text-sm text-foreground">Đang xử lý!</h3>
                 <p className="text-[12px] text-muted-foreground mt-1 max-w-48 mx-auto">
                   AI Agent đang phân tích ngầm. Kết quả sẽ xuất hiện trong thư viện báo cáo.
                 </p>
@@ -207,7 +198,7 @@ export default function ResearchCenter() {
           ) : (
             <div className="flex flex-col items-center gap-3 opacity-30">
               <Clock className="w-10 h-10 text-muted-foreground" />
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">STANDBY</p>
+              <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">STANDBY</p>
               <p className="text-[11px] text-muted-foreground">Chờ lệnh nghiên cứu...</p>
             </div>
           )}
@@ -239,10 +230,10 @@ export default function ResearchCenter() {
           <div key={step} className="flex gap-4 p-4 bg-background border border-border/50 rounded-xl">
             <div className="flex flex-col items-center gap-2 shrink-0">
               <div className="p-2 bg-muted rounded-lg">{icon}</div>
-              <div className="text-[10px] font-black text-muted-foreground/40">{step}</div>
+              <div className="text-[10px] font-medium text-muted-foreground/40">{step}</div>
             </div>
             <div>
-              <p className="text-[13px] font-bold text-foreground">{title}</p>
+              <p className="text-[13px] font-medium text-foreground">{title}</p>
               <p className="text-[12px] text-muted-foreground mt-1 leading-relaxed">{desc}</p>
             </div>
           </div>

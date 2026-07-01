@@ -1,0 +1,36 @@
+# Environment
+.env
+.env.*
+
+# IDE / Editor
+.idea
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / Frontend
+node_modules/
+build/
+.react-router/
+
+# Backend runtime
+data/
+backend/scratch/
+
+# Logs
+*.log
+
+# Project-specific
+AGENTS.md

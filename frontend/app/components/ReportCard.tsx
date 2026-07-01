@@ -8,25 +8,7 @@ import { relativeTime } from "~/lib/utils";
 import { ImpactBar } from "~/components/impact-bar";
 import { Globe as GlobeIcon, ChevronDown, ChevronUp, CheckSquare, Eye } from "lucide-react";
 import { cn } from "~/lib/utils";
-
-const SENTIMENT_STYLES: Record<string, string> = {
-  POSITIVE: "text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800/30",
-  NEUTRAL:  "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/30",
-  NEGATIVE: "text-destructive bg-destructive/10 border-destructive/20",
-  "Tích cực": "text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800/30",
-  "Trung tính":  "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/30",
-  "Tiêu cực": "text-destructive bg-destructive/10 border-destructive/20",
-};
-
-const CATEGORY_STYLES: Record<string, string> = {
-  AI_RESEARCH: "bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300",
-  LAYOFF:      "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
-  VN_MARKET:   "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
-  DEV_TOOLS:   "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-  SECURITY:    "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
-  BUSINESS:    "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  OTHER:       "bg-muted text-muted-foreground",
-};
+import { SENTIMENT_CLASSES, CATEGORY_STYLES } from "~/lib/constants";
 
 export function ReportCard({ report }: { report: ResearchReport }) {
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
@@ -58,7 +40,7 @@ export function ReportCard({ report }: { report: ResearchReport }) {
             <Badge className={cn("text-[10px] font-medium px-2 py-0 border-none rounded-full", categoryStyle)}>
               {rawCategory.replace("_", " ")}
             </Badge>
-            <Badge variant="outline" className={cn("text-[10px] font-medium px-2 py-0 rounded-full", SENTIMENT_STYLES[report.sentiment] || "bg-muted text-muted-foreground")}>
+            <Badge variant="outline" className={cn("text-[10px] font-medium px-2 py-0 rounded-full", SENTIMENT_CLASSES[report.sentiment] || "bg-muted text-muted-foreground")}>
               {report.sentiment}
             </Badge>
           </div>
@@ -110,9 +92,9 @@ export function ReportCard({ report }: { report: ResearchReport }) {
       </div>
 
       <div className="px-4 py-3.5 flex-1 flex flex-col gap-4 text-[12px]">
-        <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1">
           <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">Tóm tắt điều hành</span>
-          <p className="leading-relaxed text-muted-foreground font-medium wrap-break-word">
+          <p className="leading-relaxed text-muted-foreground wrap-break-word">
             {displaySummary}
             {summaryLength > 200 && (
               <button 
@@ -130,7 +112,7 @@ export function ReportCard({ report }: { report: ResearchReport }) {
             <span className="text-[10px] font-medium uppercase tracking-widest text-primary flex items-center gap-1">
               <GlobeIcon className="w-3 h-3" /> Tác động thị trường Việt Nam
             </span>
-            <p className="leading-relaxed text-foreground font-medium italic">
+            <p className="leading-relaxed text-foreground italic">
               &ldquo;{displayImpact}&rdquo;
               {impactLength > 150 && (
                 <button 
@@ -150,8 +132,8 @@ export function ReportCard({ report }: { report: ResearchReport }) {
             <Collapsible open={isActionsOpen} onOpenChange={setIsActionsOpen} className="flex flex-col gap-1.5">
               <div className="flex flex-col gap-1.5">
                 {displayedActions.map((action, index) => (
-                  <div key={index} className="flex items-start gap-2 text-foreground font-medium">
-                    <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                  <div key={index} className="flex items-start gap-2 text-foreground">
+                    <CheckSquare className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
                     <span className="leading-tight text-[12px]">{action}</span>
                   </div>
                 ))}
@@ -160,8 +142,8 @@ export function ReportCard({ report }: { report: ResearchReport }) {
               {actions.length > 3 && (
                 <CollapsibleContent className="space-y-1.5 pt-1.5">
                   {actions.slice(3).map((action, index) => (
-                    <div key={index} className="flex items-start gap-2 text-foreground font-medium animate-in slide-in-from-top-1 duration-200">
-                      <CheckSquare className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                    <div key={index} className="flex items-start gap-2 text-foreground animate-in slide-in-from-top-1 duration-200">
+                      <CheckSquare className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
                       <span className="leading-tight text-[12px]">{action}</span>
                     </div>
                   ))}

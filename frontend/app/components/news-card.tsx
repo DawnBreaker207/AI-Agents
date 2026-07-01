@@ -24,7 +24,7 @@ const ACCENT_COLOR: Record<NewsStatus, string> = {
 
 export function NewsCard({ news, showPromote = false, queuePos }: NewsCardProps) {
   return (
-    <div className="relative bg-background border border-border/50 rounded-lg overflow-hidden hover:border-border transition-colors">
+    <div className="relative bg-background border border-border/50 rounded-lg overflow-hidden hover:border-border/80 hover:bg-muted/10 transition-all hover:scale-[1.01]">
       <div className={cn("absolute left-0 top-0 bottom-0 w-[3px]", ACCENT_COLOR[news.status])} />
 
       <div className="pl-4 pr-4 py-3.5 flex flex-col gap-2">

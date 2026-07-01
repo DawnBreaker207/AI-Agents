@@ -89,10 +89,11 @@ export default function Feed({ loaderData }: Route.ComponentProps) {
   };
 
   const TABS_MAP = [
-    { id: "KEEP_URGENT", label: "🔥 Tin Nóng Đầu Tư / Quan Trọng", count: metrics.keep_urgent },
-    { id: "KEEP",        label: "📰 Tin Tức Đã Lọc", count: metrics.keep },
-    { id: "WATCH",       label: "👀 Đang Theo Dõi (Watch)", count: metrics.watch },
-    { id: "PENDING",     label: "⏳ Chờ AI Phân Tích", count: metrics.total_today - metrics.processed },
+    { id: "KEEP_URGENT", label: "Tin Nóng / Quan Trọng", count: metrics.keep_urgent },
+    { id: "KEEP",        label: "Tin Đã Lọc", count: metrics.keep },
+    { id: "WATCH",       label: "Đang Theo Dõi", count: metrics.watch },
+    { id: "PENDING",     label: "Chờ AI Phân Tích", count: metrics.total_today - metrics.processed },
+    { id: "TRASH",       label: "Tin Rác", count: metrics.trash },
   ] as const;
 
   return (
@@ -132,44 +133,36 @@ export default function Feed({ loaderData }: Route.ComponentProps) {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-        <div className="bg-background border border-border/50 rounded-lg px-3.5 py-3 flex flex-col justify-between">
-          <div>
-            <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest mb-1">Tin thu thập hôm nay</p>
-            <p className="text-3xl font-black text-foreground leading-none tabular-nums">
-              {metrics.total_today}
-            </p>
-          </div>
-          <p className="text-[11px] text-muted-foreground/60 mt-1.5">bài đã xử lý</p>
+        <div className="group bg-background border border-border/50 rounded-lg px-3.5 py-3 flex flex-col gap-1 hover:border-border/80 hover:bg-muted/20 transition-all hover:scale-[1.02] cursor-default">
+          <p className="text-[11px] text-muted-foreground tracking-wide">Tin thu thập hôm nay</p>
+          <p className="text-2xl font-medium text-foreground leading-none tabular-nums">
+            {metrics.total_today}
+          </p>
+          <p className="text-[11px] text-muted-foreground/60">bài đã xử lý</p>
         </div>
 
-        <div className="bg-background border border-border/50 rounded-lg px-3.5 py-3 flex flex-col justify-between">
-          <div>
-            <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest mb-1 text-destructive">Tín hiệu Quan trọng</p>
-            <p className="text-3xl font-black text-destructive leading-none tabular-nums">
-              {metrics.keep_urgent}
-            </p>
-          </div>
-          <p className="text-[11px] text-muted-foreground/60 mt-1.5">cần đọc ngay</p>
+        <div className="group bg-background border border-border/50 rounded-lg px-3.5 py-3 flex flex-col gap-1 hover:border-border/80 hover:bg-muted/20 transition-all hover:scale-[1.02] cursor-default">
+          <p className="text-[11px] text-muted-foreground tracking-wide">Tín hiệu quan trọng</p>
+          <p className="text-2xl font-medium text-destructive leading-none tabular-nums">
+            {metrics.keep_urgent}
+          </p>
+          <p className="text-[11px] text-muted-foreground/60">cần đọc ngay</p>
         </div>
 
-        <div className="bg-background border border-border/50 rounded-lg px-3.5 py-3 flex flex-col justify-between">
-          <div>
-            <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest mb-1 text-green-600 dark:text-green-400">Tin tức Chất lượng</p>
-            <p className="text-3xl font-black text-green-600 dark:text-green-400 leading-none tabular-nums">
-              {metrics.keep}
-            </p>
-          </div>
-          <p className="text-[11px] text-muted-foreground/60 mt-1.5">trong hàng đợi</p>
+        <div className="group bg-background border border-border/50 rounded-lg px-3.5 py-3 flex flex-col gap-1 hover:border-border/80 hover:bg-muted/20 transition-all hover:scale-[1.02] cursor-default">
+          <p className="text-[11px] text-muted-foreground tracking-wide">Tin đã lọc</p>
+          <p className="text-2xl font-medium text-green-600 dark:text-green-400 leading-none tabular-nums">
+            {metrics.keep}
+          </p>
+          <p className="text-[11px] text-muted-foreground/60">trong hàng đợi</p>
         </div>
 
-        <div className="bg-background border border-border/50 rounded-lg px-3.5 py-3 flex flex-col justify-between">
-          <div>
-            <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest mb-1 text-amber-600 dark:text-amber-400">Tin Bình Thường (Watch)</p>
-            <p className="text-3xl font-black text-amber-600 dark:text-amber-400 leading-none tabular-nums">
-              {metrics.watch}
-            </p>
-          </div>
-          <p className="text-[11px] text-muted-foreground/60 mt-1.5">đang theo dõi</p>
+        <div className="group bg-background border border-border/50 rounded-lg px-3.5 py-3 flex flex-col gap-1 hover:border-border/80 hover:bg-muted/20 transition-all hover:scale-[1.02] cursor-default">
+          <p className="text-[11px] text-muted-foreground tracking-wide">Đang theo dõi</p>
+          <p className="text-2xl font-medium text-amber-600 dark:text-amber-400 leading-none tabular-nums">
+            {metrics.watch}
+          </p>
+          <p className="text-[11px] text-muted-foreground/60">đang theo dõi</p>
         </div>
       </div>
 
@@ -179,10 +172,10 @@ export default function Feed({ loaderData }: Route.ComponentProps) {
             key={t.id}
             to={`?tab=${t.id}&page=1`}
             className={cn(
-              "flex items-center gap-2 px-4 py-2.5 text-[13px] border-b-2 -mb-[2px] transition-all whitespace-nowrap rounded-t-lg",
+              "flex items-center gap-2 px-4 py-2.5 text-[13px] border-b-2 -mb-[2px] transition-all whitespace-nowrap",
               tab === t.id
-                ? "border-primary text-primary font-bold bg-primary/5"
-                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/40"
+                ? "border-foreground text-foreground font-medium"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
             {t.label}
@@ -213,11 +206,11 @@ export default function Feed({ loaderData }: Route.ComponentProps) {
         ))}
 
         {news.length === 0 && (
-          <div className="col-span-full py-24 text-center flex flex-col items-center gap-4 border border-dashed border-border/60 rounded-xl bg-card/20 backdrop-blur-sm">
+          <div className="col-span-full py-24 text-center flex flex-col items-center gap-4 border border-dashed border-border/60 rounded-xl bg-card/20">
             <div className="p-4 bg-secondary/30 rounded-full">
               <LayoutGrid className="w-8 h-8 text-muted-foreground/50 animate-pulse" />
             </div>
-            <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
+              <p className="text-sm font-medium text-muted-foreground uppercase tracking-widest">
               Không có tin tức thị trường nào ở danh mục này
             </p>
             <p className="text-[12px] text-muted-foreground/60 italic max-w-sm leading-relaxed">
@@ -267,7 +260,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
         <div className="bg-destructive/10 p-4 rounded-full mb-4">
           <RefreshCcw className="w-8 h-8 text-destructive animate-pulse" />
         </div>
-        <h1 className="text-xl font-bold mb-2">Lỗi tải dữ liệu</h1>
+        <h1 className="text-xl font-medium mb-2">Lỗi tải dữ liệu</h1>
         <p className="text-muted-foreground mb-6">
           {error.status} {error.statusText}
         </p>
@@ -283,7 +276,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
       <div className="bg-destructive/10 p-4 rounded-full mb-4">
         <RefreshCcw className="w-8 h-8 text-destructive" />
       </div>
-      <h1 className="text-xl font-bold mb-2">Có lỗi xảy ra</h1>
+      <h1 className="text-xl font-medium mb-2">Có lỗi xảy ra</h1>
       <p className="text-muted-foreground mb-6">
         Hệ thống không thể tải luồng tin tức lúc này. Vui lòng kiểm tra kết nối mạng hoặc thử lại sau.
       </p>

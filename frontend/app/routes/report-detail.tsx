@@ -8,6 +8,7 @@ import { relativeTime } from "~/lib/utils";
 import { ImpactBar } from "~/components/impact-bar";
 import { ArrowLeft as ArrowLeftIcon, Globe as GlobeIcon, ExternalLink as ExternalLinkIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
+import { SENTIMENT_CLASSES, CATEGORY_STYLES } from "~/lib/constants";
 
 export const meta: Route.MetaFunction = ({ data }) => {
   const reportTitle = data?.report?.title || "Báo cáo chi tiết";
@@ -22,24 +23,7 @@ export async function loader({ params }: Route.LoaderArgs) {
   return { report };
 }
 
-const SENTIMENT_STYLES: Record<string, string> = {
-  POSITIVE: "text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800/30",
-  NEUTRAL:  "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/30",
-  NEGATIVE: "text-destructive bg-destructive/10 border-destructive/20",
-  "Tích cực": "text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800/30",
-  "Trung tính":  "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/30",
-  "Tiêu cực": "text-destructive bg-destructive/10 border-destructive/20",
-};
 
-const CATEGORY_STYLES: Record<string, string> = {
-  AI_RESEARCH: "bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300",
-  LAYOFF:      "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
-  VN_MARKET:   "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
-  DEV_TOOLS:   "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-  SECURITY:    "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
-  BUSINESS:    "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  OTHER:       "bg-muted text-muted-foreground",
-};
 
 export default function ReportDetail({ loaderData }: Route.ComponentProps) {
   const { report } = loaderData;
@@ -63,19 +47,19 @@ export default function ReportDetail({ loaderData }: Route.ComponentProps) {
           <Badge className={cn("text-[10px] font-medium px-2 py-0 border-none rounded-full", categoryStyle)}>
             {rawCategory.replace("_", " ")}
           </Badge>
-          <Badge variant="outline" className={cn("text-[10px] font-medium px-2 py-0 rounded-full", SENTIMENT_STYLES[report.sentiment] || "bg-muted text-muted-foreground")}>
+          <Badge variant="outline" className={cn("text-[10px] font-medium px-2 py-0 rounded-full", SENTIMENT_CLASSES[report.sentiment] || "bg-muted text-muted-foreground")}>
             {report.sentiment}
           </Badge>
         </div>
 
-        <h1 className="text-2xl md:text-3xl font-black text-foreground leading-tight">{report.title}</h1>
+        <h1 className="text-lg font-medium text-foreground leading-snug">{report.title}</h1>
 
         {report.original_source && (
           <a 
             href={report.original_source} 
             target="_blank" 
             rel="noopener noreferrer" 
-            className="inline-flex items-center gap-2 px-4 py-2 mt-2 bg-secondary/40 hover:bg-secondary text-secondary-foreground text-sm font-medium rounded-lg transition-colors w-fit border border-border/50 shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2 mt-2 bg-secondary/40 hover:bg-secondary text-secondary-foreground text-sm font-medium rounded-lg transition-colors w-fit border border-border/50"
           >
             <GlobeIcon className="w-4 h-4 text-primary" />
             Đọc bài báo gốc nguyên bản
@@ -99,7 +83,7 @@ export default function ReportDetail({ loaderData }: Route.ComponentProps) {
         content ? (
           <div key={label} className="flex flex-col gap-2">
             <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">{label}</p>
-            <div className="border border-border/50 rounded-lg px-4 py-3.5 bg-background">
+            <div className="border border-border/50 rounded-lg px-4 py-3.5">
               {label === "Phân tích kỹ thuật chuyên sâu" ? (
                 <div className="prose prose-sm dark:prose-invert max-w-none text-sm text-foreground leading-7">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -141,13 +125,13 @@ export default function ReportDetail({ loaderData }: Route.ComponentProps) {
                 href={citation} 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 p-3 border border-border/50 rounded-xl bg-card/40 hover:bg-secondary/40 transition-colors group shadow-sm"
+                className="flex items-center gap-3 p-3 border border-border/50 rounded-xl bg-card/30 hover:bg-secondary/40 transition-colors group"
               >
-                <div className="p-2 bg-background rounded-lg shadow-sm border border-border/50 group-hover:scale-105 transition-transform">
+                <div className="p-2 bg-background rounded-lg border border-border/50 group-hover:scale-105 transition-transform">
                   <GlobeIcon className="w-4 h-4 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-0.5">Nguồn tham khảo {idx + 1}</p>
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest mb-0.5">Nguồn tham khảo {idx + 1}</p>
                   <p className="text-[13px] font-medium text-foreground group-hover:text-primary transition-colors truncate">
                     {citation.replace(/^https?:\/\//, '').replace(/^www\./, '')}
                   </p>
