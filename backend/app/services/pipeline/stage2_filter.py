@@ -10,7 +10,7 @@ from app.prompts.stage2_filter import STAGE2_FILTER_PROMPT
 from app.models.news import PendingNews
 from app.models.category import TopicWhitelist
 from app.services.notify import DiscordNotifier
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +24,94 @@ LAYOFF_KEYWORDS = [
     "job cut", "workforce reduction", "headcount"
 ]
 
+CATEGORY_FALLBACK_TAGS = {
+    "AI_RESEARCH": ["AI Research"],
+    "LAYOFF": ["Layoff & Job Market"],
+    "VN_MARKET": ["Vietnam Tech"],
+    "DEV_TOOLS": ["Developer Tools"],
+    "SECURITY": ["Security"],
+    "BUSINESS": ["Business & Startup"],
+    "OTHER": ["Tech News"],
+}
+
+KEYWORD_TAGS: list[tuple[str, str]] = [
+    # AI & ML
+    ("artificial intelligence", "AI"), ("machine learning", "Machine Learning"),
+    ("deep learning", "Deep Learning"), ("large language model", "LLM"),
+    ("llm", "LLM"), ("gpt", "GPT"), ("openai", "OpenAI"), ("chatgpt", "ChatGPT"),
+    ("claude", "Claude"), ("anthropic", "Anthropic"), ("gemini", "Gemini"),
+    ("copilot", "Copilot"), ("hugging face", "Hugging Face"),
+    ("neural network", "Neural Network"), ("transformer model", "Transformer"),
+    ("generative ai", "Generative AI"), ("genai", "Generative AI"),
+    ("computer vision", "Computer Vision"), ("nlp", "NLP"),
+    ("llama", "LLaMA"), ("mistral", "Mistral"),
+    # Java & Spring
+    ("java spring boot", "Spring Boot"), ("spring boot", "Spring Boot"),
+    ("spring framework", "Spring Framework"), ("spring", "Spring"),
+    ("hibernate", "Hibernate"), ("jakarta ee", "Jakarta EE"),
+    ("jakarta", "Jakarta EE"), ("jvm", "JVM"), ("kotlin", "Kotlin"),
+    ("microservices", "Microservices"), ("jpa", "JPA"),
+    ("maven", "Maven"), ("gradle", "Gradle"), ("junit", "JUnit"),
+    # Frontend
+    ("react", "React"), ("angular", "Angular"), ("vue", "Vue.js"),
+    ("typescript", "TypeScript"), ("javascript", "JavaScript"),
+    ("frontend", "Frontend"), ("next.js", "Next.js"), ("nextjs", "Next.js"),
+    ("tailwind", "Tailwind CSS"), ("webpack", "Webpack"),
+    # DevOps & Cloud
+    ("docker", "Docker"), ("kubernetes", "Kubernetes"), ("k8s", "Kubernetes"),
+    ("aws", "AWS"), ("azure", "Azure"), ("gcp", "Google Cloud"),
+    ("google cloud", "Google Cloud"), ("cloud computing", "Cloud Computing"),
+    ("devops", "DevOps"), ("terraform", "Terraform"), ("ci/cd", "CI/CD"),
+    ("linux", "Linux"), ("jenkins", "Jenkins"), ("github actions", "CI/CD"),
+    # Data
+    ("data science", "Data Science"), ("data scientist", "Data Science"),
+    ("big data", "Big Data"), ("database", "Database"), ("sql", "SQL"),
+    ("nosql", "NoSQL"), ("mongodb", "MongoDB"), ("postgresql", "PostgreSQL"),
+    ("postgres", "PostgreSQL"), ("redis", "Redis"),
+    # Job & Career
+    ("hiring", "Hiring"), ("layoff", "Layoff"), ("laid off", "Layoff"),
+    ("job cut", "Layoff"), ("sa thải", "Layoff"), ("recruitment", "Recruitment"),
+    ("tuyển dụng", "Recruitment"), ("salary", "Salary"), ("lương", "Salary"),
+    ("remote work", "Remote Work"), ("work from home", "Remote Work"),
+    ("job market", "Job Market"), ("career", "Career"), ("việc làm", "Jobs"),
+    ("internship", "Internship"), ("thực tập", "Internship"),
+    # Security
+    ("security", "Security"), ("cybersecurity", "Cybersecurity"),
+    ("vulnerability", "Security"), ("ransomware", "Ransomware"),
+    ("data breach", "Data Breach"), ("privacy", "Privacy"),
+    # Business
+    ("startup", "Startup"), ("ipo", "IPO"), ("acquisition", "Acquisition"),
+    ("merger", "Merger"), ("fundraising", "Fundraising"),
+    ("venture capital", "Venture Capital"), ("revenue", "Revenue"),
+    # Programming Languages
+    ("python", "Python"), ("rust", "Rust"), ("golang", "Go"), ("ruby", "Ruby"),
+    ("swift", "Swift"), ("c++", "C++"), ("c#", "C#"), ("php", "PHP"),
+    # Mobile
+    ("android", "Android"), ("ios", "iOS"), ("flutter", "Flutter"),
+    ("react native", "React Native"), ("swiftui", "SwiftUI"),
+    # General Tech
+    ("software", "Software"), ("developer", "Developer"),
+    ("open source", "Open Source"), ("api", "API"),
+    ("blockchain", "Blockchain"), ("web3", "Web3"), ("saas", "SaaS"),
+    ("product launch", "Product Launch"), ("new release", "Release"),
+    ("version", "Release"),
+]
+
+
+def _assign_topics_by_keywords(title: str, snippet: str | None) -> list[str]:
+    combined = (title + " " + (snippet or "")).lower()
+    topics = []
+    for keyword, tag in KEYWORD_TAGS:
+        if keyword.lower() in combined and tag not in topics:
+            topics.append(tag)
+    return topics
+
 
 class FilterSignal(BaseModel):
     id: int
     title_vi: str = ""
     impact_score: float = 0.0
     category: str = "OTHER"
-    matched_topics: list[str] = Field(default_factory=list)
     reason: str = ""
 
 
@@ -73,7 +154,6 @@ class GatekeeperStage:
             + '      "title_vi": "Tiêu đề bài báo được dịch sang Tiếng Việt chính xác và tự nhiên",\n'
             + '      "impact_score": 8.5,\n'
             + '      "category": "LAYOFF",\n'
-            + '      "matched_topics": ["AI layoff", "Vietnam tech market"],\n'
             + '      "reason": "Mô tả lý do chấm điểm"\n'
             + "    }\n"
             + "  ]\n"
@@ -106,11 +186,13 @@ class GatekeeperStage:
             news_id = signal.id
             score = signal.impact_score
             category = signal.category
-            matched = signal.matched_topics
 
             news = next((n for n in batch if n.id == news_id), None)
             if not news:
                 continue
+
+            # Tags bằng keyword matching — không cần AI
+            matched = _assign_topics_by_keywords(news.title, news.snippet)
 
             combined = (news.title + " " + (news.snippet or "")).lower()
 
@@ -123,6 +205,9 @@ class GatekeeperStage:
                         score = 8.0
 
             is_critical = any(kw in combined for kw in CRITICAL_KEYWORDS)
+
+            if not matched:
+                matched = [CATEGORY_FALLBACK_TAGS.get(category, "Tech News")]
 
             news.impact_score = round(score, 2)
             news.category = category

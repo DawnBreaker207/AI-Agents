@@ -80,8 +80,9 @@ class ScoutStage:
                     feed = feedparser.parse(source.url)
                     feed_base_url = feed.feed.get("link", "") or source.url
 
+                    total_entries = len(feed.entries)
                     logger.info(
-                        f"Scout: Source '{source.name}' — {len(feed.entries)} entries. "
+                        f"Scout: Source '{source.name}' — {total_entries} entries. "
                         f"Base URL: {feed_base_url}"
                     )
 
@@ -146,6 +147,42 @@ class ScoutStage:
                         new_count += 1
                         source_new_count += 1
 
+                    # Dead-link health check
+                    relevant = total_entries - source_skip_old  # chỉ tính entries trong time window
+                    total_issues = source_skip_dead + source_skip_invalid
+                    if relevant > 0 and (total_issues / relevant) > 0.5:
+                        source.consecutive_fails = (source.consecutive_fails or 0) + 1
+                        source.last_error = (
+                            f"{total_issues}/{relevant} entries dead/invalid "
+                            f"(run {source.consecutive_fails})"
+                        )
+                        logger.warning(
+                            f"  ⚠ '{source.name}': {total_issues}/{relevant} entries dead — "
+                            f"consecutive_fails={source.consecutive_fails}"
+                        )
+                    elif total_entries == 0:
+                        source.consecutive_fails = (source.consecutive_fails or 0) + 1
+                        source.last_error = f"Feed returned 0 entries (run {source.consecutive_fails})"
+                        logger.warning(
+                            f"  ⚠ '{source.name}': feed empty — "
+                            f"consecutive_fails={source.consecutive_fails}"
+                        )
+                    else:
+                        if source.consecutive_fails and source.consecutive_fails > 0:
+                            logger.info(f"  ✓ '{source.name}': recovered, resetting fail counter")
+                        source.consecutive_fails = 0
+                        source.last_error = ""
+
+                    # Auto-disable after 3 consecutive bad runs
+                    if (source.consecutive_fails or 0) >= 3:
+                        source.is_active = False
+                        source.disabled_at = datetime.now(timezone.utc)
+                        logger.warning(
+                            f"  🔴 Auto-disabled '{source.name}' after "
+                            f"{source.consecutive_fails} consecutive failures. "
+                            f"Last error: {source.last_error}"
+                        )
+
                     logger.info(
                         f"  → '{source.name}': "
                         f"{source_new_count} new | "
@@ -156,7 +193,18 @@ class ScoutStage:
                     )
 
                 except Exception as e:
-                    logger.error(f"Scout error [{source.name}]: {e}", exc_info=True)
+                    error_msg = f"{type(e).__name__}: {e}"
+                    source.consecutive_fails = (source.consecutive_fails or 0) + 1
+                    source.last_error = error_msg
+                    if (source.consecutive_fails or 0) >= 3:
+                        source.is_active = False
+                        source.disabled_at = datetime.now(timezone.utc)
+                        logger.warning(
+                            f"  🔴 Auto-disabled '{source.name}' after "
+                            f"{source.consecutive_fails} consecutive failures: {error_msg}"
+                        )
+                    else:
+                        logger.error(f"Scout error [{source.name}]: {error_msg}")
 
         await db.commit()
         if new_count > 0:

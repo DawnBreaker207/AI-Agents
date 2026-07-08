@@ -6,15 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.source import SourceList
+from app.schemas.source import SourceListSchema
 
 router = APIRouter(prefix="/api/sources")
 logger = logging.getLogger(__name__)
 
 
-@router.get("")
+@router.get("", response_model=list[SourceListSchema])
 async def get_sources(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(SourceList).order_by(SourceList.id.desc()))
-    return result.scalars().all()
+    sources = result.scalars().all()
+    return [SourceListSchema.model_validate(s) for s in sources]
 
 
 @router.put("/{source_id}/toggle")

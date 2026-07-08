@@ -24,11 +24,21 @@ async def _get_status(news_id: int) -> str:
 async def run_pipeline():
     logger.info("Pipeline starting...")
 
-    async with AsyncSessionLocal() as db:
-        await ScoutStage().run(db)
+    try:
+        async with AsyncSessionLocal() as db:
+            await ScoutStage().run(db)
+    except Exception as e:
+        logger.error(f"Stage 1 (Scout) failed: {e}", exc_info=True)
+        return  # Không chạy tiếp nếu Scout lỗi
 
-    async with AsyncSessionLocal() as db:
-        all_ids = await GatekeeperStage().run(db)
+    await asyncio.sleep(settings.LLM_CALL_DELAY)
+
+    try:
+        async with AsyncSessionLocal() as db:
+            all_ids = await GatekeeperStage().run(db)
+    except Exception as e:
+        logger.error(f"Stage 2 (Gatekeeper) failed: {e}", exc_info=True)
+        return
 
     urgent_ids = []
     normal_ids = []
@@ -45,6 +55,7 @@ async def run_pipeline():
                 await DeepAnalysisStage().run(news_id, db)
         except Exception as e:
             logger.error(f"Stage 3 URGENT error [news_id={news_id}]: {e}")
+        await asyncio.sleep(settings.LLM_CALL_DELAY)
 
     for news_id in normal_ids:
         try:

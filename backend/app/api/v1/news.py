@@ -87,6 +87,21 @@ async def get_watch_news(
     return result.scalars().all()
 
 
+@router.get("/trash")
+async def get_trash_news(
+    page: int = 1, size: int = 20,
+    db: AsyncSession = Depends(get_db)
+):
+    offset = (page - 1) * size
+    result = await db.execute(
+        select(PendingNews)
+        .where(PendingNews.status == "TRASH")
+        .order_by(PendingNews.impact_score.desc())
+        .offset(offset).limit(size)
+    )
+    return result.scalars().all()
+
+
 @router.get("/inaccessible")
 async def get_inaccessible_news(
     page: int = 1, size: int = 20,
