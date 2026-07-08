@@ -96,7 +96,7 @@ export default function SourcesPage({ loaderData }: Route.ComponentProps) {
             {list.map(source => {
               const isThisSubmitting = isSubmitting && String(submittingId) === String(source.id);
               return (
-                <TableRow key={source.id} className="group hover:bg-muted/10 transition-colors">
+                <TableRow key={source.id} className="group hover:bg-muted/10 motion-safe:transition-colors">
                   <TableCell>
                     <div className={`h-2 w-2 rounded-full mx-auto transition-colors ${
                       source.is_active ? 'bg-green-500' : 'bg-muted-foreground/30'
@@ -135,7 +135,8 @@ export default function SourcesPage({ loaderData }: Route.ComponentProps) {
                         variant={source.is_active ? "outline" : "default"}
                         size="sm"
                         disabled={isSubmitting}
-                        className="text-[9px] font-medium uppercase tracking-wider h-7 px-3.5"
+                        className="text-[9px] font-medium uppercase tracking-wider min-h-11 px-4"
+                        aria-label={source.is_active ? `Tắt nguồn ${source.name}` : `Bật nguồn ${source.name}`}
                       >
                         {isThisSubmitting
                           ? "..."
@@ -161,14 +162,14 @@ export default function SourcesPage({ loaderData }: Route.ComponentProps) {
   );
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-500 max-w-7xl mx-auto pb-16">
+    <div className="space-y-10 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500 max-w-7xl mx-auto pb-16">
       {/* ── HEADER ── */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6 border-border/50">
         <div className="space-y-1">
-          <h2 className="text-lg font-medium text-foreground tracking-tight flex items-center gap-2">
+          <h1 className="text-lg font-medium text-foreground tracking-tight flex items-center gap-2">
             <Settings className="w-4 h-4 text-muted-foreground" />
             Quản lý nguồn tin
-          </h2>
+          </h1>
           <p className="text-[12px] text-muted-foreground">
             Quản lý whitelist topics và các nguồn dữ liệu RSS.
           </p>
@@ -194,8 +195,8 @@ export default function SourcesPage({ loaderData }: Route.ComponentProps) {
               <Form ref={addFormRef} method="post" className="flex flex-wrap gap-4 items-end bg-muted/10 p-4 rounded-xl border">
                 <input type="hidden" name="intent" value="add-whitelist" />
                 <div className="flex-1 min-w-[200px] space-y-1.5">
-                  <label className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground block">Tên Topic / Từ khóa</label>
-                  <Input name="topic" required placeholder="Ví dụ: ChatGPT, Nvidia, VinFast..." className="h-9 text-xs bg-background" />
+                  <label htmlFor="topic-name" className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground block">Tên Topic / Từ khóa</label>
+                  <Input id="topic-name" name="topic" required placeholder="Ví dụ: ChatGPT, Nvidia, VinFast..." className="min-h-11 text-xs bg-background" />
                 </div>
                 <div className="w-24 space-y-1.5">
                   <label className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground block">Boost Score</label>
@@ -223,9 +224,9 @@ export default function SourcesPage({ loaderData }: Route.ComponentProps) {
                   </TableHeader>
                   <TableBody>
                     {whitelist.map(topic => (
-                      <TableRow key={topic.id} className="hover:bg-muted/5 transition-colors">
+                      <TableRow key={topic.id} className="hover:bg-muted/5 motion-safe:transition-colors">
                         <TableCell className="font-medium text-xs">{topic.topic}</TableCell>
-                        <TableCell className="text-center font-mono text-xs text-orange-500 font-medium">
+                        <TableCell className="text-center font-mono text-xs text-amber-600 dark:text-amber-400 font-medium">
                           x{topic.boost_score}
                         </TableCell>
                         <TableCell className="text-center">
@@ -242,7 +243,8 @@ export default function SourcesPage({ loaderData }: Route.ComponentProps) {
                               variant="ghost"
                               size="icon"
                               disabled={isSubmitting}
-                              className="text-muted-foreground hover:text-destructive h-8 w-8 rounded-lg"
+                              className="text-muted-foreground hover:text-destructive min-h-11 min-w-11 rounded-lg"
+                              aria-label={`Xóa topic ${topic.topic}`}
                             >
                               <Trash2 size={14} />
                             </Button>

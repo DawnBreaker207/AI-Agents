@@ -46,7 +46,7 @@ export default function ResearchCenter() {
   const result = fetcher.data;
 
   return (
-    <div className="max-w-4xl mx-auto flex flex-col gap-10 pb-16 animate-in fade-in duration-500">
+    <div className="max-w-4xl mx-auto flex flex-col gap-10 pb-16 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500">
 
       {/* ── HEADER ── */}
       <div className="flex flex-col gap-3 pt-4">
@@ -78,12 +78,14 @@ export default function ResearchCenter() {
 
         <fetcher.Form method="post" className="p-6 flex flex-col gap-6">
           <div className="flex flex-col gap-2">
+            <label htmlFor="research-topic" className="sr-only">Chủ đề nghiên cứu</label>
             <textarea
+              id="research-topic"
               name="topic"
               required
               disabled={isRunning}
               rows={4}
-              className="w-full bg-muted/30 border border-border/60 rounded-xl px-4 py-3.5 text-sm text-foreground focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-none transition-all placeholder:text-muted-foreground/40 font-medium disabled:opacity-60 resize-none"
+              className="w-full bg-muted/30 border border-border/60 rounded-xl px-4 py-3.5 text-sm text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 outline-none motion-safe:transition-colors placeholder:text-muted-foreground/40 font-medium disabled:opacity-60 resize-none"
               placeholder="Ví dụ: Phân tích sự dịch chuyển từ Microservices sang Monolith của các tập đoàn Tech năm 2025..."
             />
             <p className="text-[11px] text-muted-foreground/60">
@@ -105,7 +107,8 @@ export default function ResearchCenter() {
                     const textarea = form?.querySelector("textarea[name='topic']") as HTMLTextAreaElement;
                     if (textarea) textarea.value = t;
                   }}
-                  className="text-[11px] px-3 py-1.5 rounded-full border border-border/60 bg-secondary/30 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors text-left disabled:opacity-50 cursor-pointer"
+                  aria-label={`Chọn chủ đề: ${t}`}
+              className="text-[11px] px-3 py-1.5 rounded-full border border-border/60 bg-secondary/30 text-muted-foreground hover:bg-secondary hover:text-foreground motion-safe:transition-colors text-left disabled:opacity-50 cursor-pointer"
                 >
                   {t}
                 </button>
@@ -133,21 +136,21 @@ export default function ResearchCenter() {
         {/* Trace Log */}
         <div className="bg-background border border-border/50 rounded-2xl overflow-hidden">
           <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
+            <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
               <Terminal className="w-3.5 h-3.5" />
               System Trace Log
             </div>
-            <div className={`w-2 h-2 rounded-full ${isRunning ? "bg-emerald-500 animate-pulse" : result ? "bg-blue-500" : "bg-muted-foreground/30"}`} />
+            <div className={`w-2 h-2 rounded-full ${isRunning ? "bg-primary motion-safe:animate-pulse" : result ? "bg-muted-foreground/60" : "bg-muted-foreground/30"}`} />
           </div>
           <div className="p-4 font-mono text-[11px] leading-relaxed h-48 overflow-y-auto space-y-1.5">
             {isRunning ? (
-              <p className="text-blue-400 animate-pulse">Request sent — pipeline is running in background...</p>
+              <p className="text-muted-foreground motion-safe:animate-pulse">Request sent — pipeline is running in background...</p>
             ) : result?.success ? (
               <>
-                <p className="text-blue-400 font-medium">[{new Date().toLocaleTimeString()}] COMPLETED ✓</p>
+                <p className="text-foreground font-medium">[{new Date().toLocaleTimeString()}] COMPLETED ✓</p>
                 <p className="text-muted-foreground">Topic: "{result.report.topic}"</p>
                 <p className="text-muted-foreground">Status: {result.report.status}</p>
-                <p className="text-emerald-400 mt-2">→ Báo cáo đang được lưu vào thư viện...</p>
+                <p className="text-green-600 dark:text-green-400 mt-2">→ Báo cáo đang được lưu vào thư viện...</p>
               </>
             ) : result?.success === false ? (
               <p className="text-destructive font-medium">[ERROR] {result.error}</p>
@@ -160,9 +163,9 @@ export default function ResearchCenter() {
         {/* Status Card */}
         <div className="bg-background border border-border/50 rounded-2xl flex flex-col items-center justify-center p-8 text-center gap-4">
           {result?.success ? (
-            <div className="space-y-4 animate-in zoom-in-95 duration-500">
-              <div className="mx-auto w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 flex items-center justify-center">
-                <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+            <div className="space-y-4 motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-500">
+              <div className="mx-auto w-16 h-16 rounded-full bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800/40 flex items-center justify-center">
+                <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-400" />
               </div>
               <div>
                 <h3 className="font-medium text-sm text-foreground">Đang xử lý!</h3>
@@ -188,9 +191,9 @@ export default function ResearchCenter() {
             <div className="flex flex-col items-center gap-3">
               <div className="relative w-16 h-16">
                 <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
-                <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent motion-safe:animate-spin" />
               </div>
-              <p className="text-[12px] font-medium text-muted-foreground uppercase tracking-wide animate-pulse">
+              <p className="text-[12px] font-medium text-muted-foreground uppercase tracking-wide motion-safe:animate-pulse">
                 AI đang phân tích...
               </p>
               <p className="text-[11px] text-muted-foreground/60">Quá trình này có thể mất 1-3 phút</p>
@@ -224,13 +227,12 @@ export default function ResearchCenter() {
             step: "03",
             title: "Deep Analysis + Dẫn chứng",
             desc: "Jina Reader đọc toàn bộ bài gốc, ReAct Loop phân tích nhiều chiều, lưu kèm link nguồn xác minh.",
-            icon: <Microscope className="w-4 h-4 text-emerald-500" />,
+            icon: <Microscope className="w-4 h-4 text-muted-foreground" />,
           },
-        ].map(({ step, title, desc, icon }) => (
-          <div key={step} className="flex gap-4 p-4 bg-background border border-border/50 rounded-xl">
+        ].map(({ title, desc, icon }) => (
+          <div key={title} className="flex gap-4 p-4 bg-background border border-border/50 rounded-xl">
             <div className="flex flex-col items-center gap-2 shrink-0">
               <div className="p-2 bg-muted rounded-lg">{icon}</div>
-              <div className="text-[10px] font-medium text-muted-foreground/40">{step}</div>
             </div>
             <div>
               <p className="text-[13px] font-medium text-foreground">{title}</p>

@@ -7,6 +7,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
 } from "~/components/ui/sidebar";
 import { 
   Rss as RssIcon, 
@@ -17,7 +18,7 @@ import {
   Radar as RadarIcon,
   Briefcase as BriefcaseIcon
 } from "lucide-react";
-import { ModeToggle } from "~/components/mode-toggle";
+import { ModeToggle } from "~/components/layout/mode-toggle";
 import type { FeedMetrics } from "~/types";
 
 const MAIN_ITEMS = [
@@ -85,7 +86,7 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar className="w-[200px] border-r border-border/50 shrink-0 bg-background h-full flex flex-col justify-between" collapsible="none">
+    <Sidebar className="border-r border-border/50 shrink-0 bg-background h-full flex flex-col justify-between">
       {/* Header */}
       <SidebarHeader className="p-0 shrink-0">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border/50">
@@ -124,6 +125,8 @@ export function AppSidebar() {
 
         </div>
       </SidebarContent>
+
+      <SidebarRail />
 
       {/* Footer */}
       <SidebarFooter className="border-t border-border/50 p-2 shrink-0 flex items-center justify-between">

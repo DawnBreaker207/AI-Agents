@@ -4,8 +4,9 @@ import { FileText, Search, Filter } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Form, useSubmit, useNavigation } from "react-router";
-import { ReportCard } from "~/components/ReportCard";
+import { ReportCard } from "~/components/report/report-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { useCallback, useRef } from "react";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
@@ -59,10 +60,11 @@ export default function ReportsPage({ loaderData }: Route.ComponentProps) {
   const navigation = useNavigation();
   const isSearching = navigation.state === "loading";
 
-  const handleSearchChange = (e: React.FormEvent<HTMLFormElement>) => {
-    // Automatically submit form on changes for a dynamic real-time experience
-    submit(e.currentTarget, { replace: true });
-  };
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const handleSearchChange = useCallback((e: React.FormEvent<HTMLFormElement>) => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => submit(e.currentTarget, { replace: true }), 300);
+  }, [submit]);
 
   const categories = [
     { value: "all", label: "Tất cả danh mục" },
@@ -76,16 +78,16 @@ export default function ReportsPage({ loaderData }: Route.ComponentProps) {
   ];
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 max-w-5xl mx-auto pb-16">
+    <div className="space-y-8 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500 max-w-5xl mx-auto pb-16">
       
       {/* ── HEADER ── */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b pb-6 border-border/50">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <FileText className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-lg font-medium text-foreground tracking-tight">
+            <h1 className="text-lg font-medium text-foreground tracking-tight">
               Báo cáo chiến lược
-            </h2>
+            </h1>
           </div>
           <p className="text-[12px] text-muted-foreground">
             Thư viện báo cáo phân tích thị trường từ AI — Cập nhật liên tục.
@@ -101,15 +103,18 @@ export default function ReportsPage({ loaderData }: Route.ComponentProps) {
       >
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/60" />
+          <label htmlFor="search-report" className="sr-only">Tìm kiếm báo cáo</label>
           <Input 
+            id="search-report"
             name="search" 
             defaultValue={search} 
             placeholder="Tìm kiếm theo tiêu đề hoặc nội dung..." 
-            className="pl-9 h-10 text-xs bg-background"
+            className="pl-9 min-h-11 text-xs bg-background"
           />
         </div>
         
         <div className="w-full md:w-56">
+          <label htmlFor="category-select" className="sr-only">Lọc danh mục</label>
           <Select 
             name="category" 
             defaultValue={category} 
@@ -118,7 +123,7 @@ export default function ReportsPage({ loaderData }: Route.ComponentProps) {
               if (form) submit(form, { replace: true });
             }}
           >
-            <SelectTrigger className="h-10 text-xs bg-background">
+            <SelectTrigger id="category-select" className="min-h-11 text-xs bg-background">
               <SelectValue placeholder="Chọn danh mục" />
             </SelectTrigger>
             <SelectContent>
@@ -134,9 +139,9 @@ export default function ReportsPage({ loaderData }: Route.ComponentProps) {
 
       {/* ── REPORTS GRID ── */}
       {isSearching ? (
-        <div className="grid gap-6 md:grid-cols-2 animate-pulse">
+        <div className="grid gap-6 md:grid-cols-2 motion-safe:animate-pulse">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-64 bg-muted rounded-2xl" />
+            <div key={i} className="h-64 bg-muted rounded-xl" />
           ))}
         </div>
       ) : reports.length > 0 ? (
@@ -147,8 +152,8 @@ export default function ReportsPage({ loaderData }: Route.ComponentProps) {
         </div>
       ) : (
         <div className="py-32 text-center flex flex-col items-center gap-4 opacity-30">
-          <Search size={48} className="animate-pulse text-muted-foreground" />
-          <p className="font-medium uppercase tracking-[0.3em] text-sm">Không tìm thấy báo cáo nào</p>
+          <Search size={48} className="text-muted-foreground" />
+          <p className="font-medium uppercase tracking-widest text-sm">Không tìm thấy báo cáo nào</p>
           <p className="text-xs text-muted-foreground italic">Hãy thử thay đổi từ khóa hoặc bộ lọc danh mục.</p>
         </div>
       )}

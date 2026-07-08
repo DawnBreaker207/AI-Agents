@@ -9,7 +9,8 @@ import {
 
 import type {Route} from "./+types/root";
 import "./app.css";
-import {ThemeProvider} from "~/components/theme_provider";
+import {ThemeProvider} from "~/components/layout/theme-provider";
+import { Toaster } from "~/components/ui/sonner";
 
 export const links: Route.LinksFunction = () => [
     {rel: "preconnect", href: "https://fonts.googleapis.com"},
@@ -39,6 +40,7 @@ export function Layout() {
             defaultTheme="system"
             enableSystem>
             <Outlet/>
+            <Toaster position="top-right" richColors closeButton />
         </ThemeProvider>
         <ScrollRestoration/>
         <Scripts/>

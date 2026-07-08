@@ -2,9 +2,10 @@ import type { Route } from "./+types/feed";
 import { Link, useRevalidator } from "react-router";
 import { useState, useEffect } from "react";
 import { getNewsByStatus, getFeedMetrics, triggerPipeline, API_BASE_URL } from "~/lib/api";
-import { NewsCard } from "~/components/news-card";
+import { NewsCard } from "~/components/shared/news-card";
 import { cn, relativeTime } from "~/lib/utils";
 import { Rss as RssIcon, Clock as ClockIcon, LayoutGrid, RefreshCcw } from "lucide-react";
+import { toast } from "sonner";
 
 export const meta: Route.MetaFunction = () => {
   return [
@@ -79,10 +80,14 @@ export default function Feed({ loaderData }: Route.ComponentProps) {
     setIsTriggering(true);
     try {
       await triggerPipeline();
-      alert("Đã kích hoạt quét tin tức thủ công. Hệ thống đang thu thập và phân tích nền!");
+      toast.success("Pipeline đã kích hoạt", {
+        description: "Hệ thống đang thu thập và phân tích tin tức nền.",
+      });
       revalidate();
-    } catch (e) {
-      alert("Lỗi kích hoạt pipeline.");
+    } catch {
+      toast.error("Lỗi kích hoạt pipeline", {
+        description: "Không thể kết nối backend. Vui lòng thử lại sau.",
+      });
     } finally {
       setIsTriggering(false);
     }

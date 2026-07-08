@@ -1,9 +1,9 @@
 import { Form } from "react-router";
 import { cn } from "~/lib/utils";
 import type { PendingNews, NewsStatus } from "~/types";
-import { CategoryBadge } from "~/components/category-badge";
+import { CategoryBadge } from "~/components/shared/category-badge";
 import { relativeTime } from "~/lib/utils";
-import { ImpactBar } from "~/components/impact-bar";
+import { ImpactBar } from "~/components/shared/impact-bar";
 import { Button } from "~/components/ui/button";
 import { Globe as GlobeIcon } from "lucide-react";
 
@@ -24,39 +24,34 @@ const ACCENT_COLOR: Record<NewsStatus, string> = {
 
 export function NewsCard({ news, showPromote = false, queuePos }: NewsCardProps) {
   return (
-    <div className="relative bg-background border border-border/50 rounded-lg overflow-hidden hover:border-border/80 hover:bg-muted/10 transition-all hover:scale-[1.01]">
+    <div className="relative bg-background border border-border/50 rounded-lg overflow-hidden hover:border-border transition-colors">
+      {/* Accent bar — visual status indicator */}
       <div className={cn("absolute left-0 top-0 bottom-0 w-[3px]", ACCENT_COLOR[news.status])} />
 
       <div className="pl-4 pr-4 py-3.5 flex flex-col gap-2">
 
+        {/* Tầng 1 — Meta: category badge + thời gian (nhỏ, muted) */}
         <div className="flex items-center gap-1.5 flex-wrap">
           {news.category && <CategoryBadge category={news.category} />}
           {news.published_at && (
             <>
-              {news.category && <span className="text-muted-foreground/40">·</span>}
+              <span className="text-muted-foreground/40 mx-0.5">·</span>
               <span className="text-[11px] text-muted-foreground/60 tabular-nums">
                 {relativeTime(news.published_at)}
               </span>
             </>
           )}
-          {queuePos !== undefined && news.status === "KEEP" && (
+          {queuePos && (
             <>
-              <span className="text-muted-foreground/40">·</span>
+              <span className="text-muted-foreground/40 mx-0.5">·</span>
               <span className="text-[11px] text-muted-foreground/60">
                 Hàng đợi #{queuePos}
               </span>
             </>
           )}
-          {news.status === "KEEP_URGENT" && (
-            <>
-              <span className="text-muted-foreground/40">·</span>
-              <span className="text-[11px] text-destructive font-medium animate-pulse">
-                Running Stage 3...
-              </span>
-            </>
-          )}
         </div>
 
+        {/* Tầng 2 — Title: anchor chính, font-medium, line-clamp-2 */}
         <a
           href={news.url}
           target="_blank"
@@ -66,12 +61,14 @@ export function NewsCard({ news, showPromote = false, queuePos }: NewsCardProps)
           {news.title}
         </a>
 
+        {/* Tầng 3 — Snippet: detail phụ, chỉ hiện khi có, line-clamp-2 */}
         {news.snippet && (
           <p className="text-[12px] text-muted-foreground leading-relaxed line-clamp-2">
             {news.snippet}
           </p>
         )}
 
+        {/* Topic chips — tối đa 4 */}
         {news.matched_topics && news.matched_topics.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {news.matched_topics.slice(0, 4).map((t) => (
@@ -85,7 +82,9 @@ export function NewsCard({ news, showPromote = false, queuePos }: NewsCardProps)
           </div>
         )}
 
+        {/* Footer — source + impact */}
         <div className="flex items-center justify-between pt-0.5">
+          {/* Source */}
           <div className="flex items-center gap-1.5">
             <div className="w-3.5 h-3.5 rounded-[3px] bg-secondary flex items-center justify-center">
               <GlobeIcon className="w-2 h-2 text-muted-foreground/50" />
@@ -95,9 +94,11 @@ export function NewsCard({ news, showPromote = false, queuePos }: NewsCardProps)
             </span>
           </div>
 
+          {/* Impact bar */}
           <ImpactBar score={news.impact_score} status={news.status} />
         </div>
 
+        {/* Promote button — chỉ hiện khi showPromote=true */}
         {showPromote && (
           <Form method="post">
             <input type="hidden" name="newsId" value={news.id} />

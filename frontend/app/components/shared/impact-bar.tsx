@@ -23,7 +23,7 @@ export function ImpactBar({ score, status }: ImpactBarProps) {
   const color  = SEGMENT_COLOR[status];
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1.5" role="img" aria-label={`Điểm ảnh hưởng: ${score} trên 10`}>
       <div className="flex items-center gap-0.5">
         {Array.from({ length: 5 }).map((_, i) => (
           <div

@@ -1,11 +1,11 @@
 import { Outlet, useLocation } from "react-router";
-import { SidebarProvider } from "~/components/ui/sidebar";
-import { AppSidebar } from "~/components/app-sidebar";
-import { ModeToggle } from "~/components/mode-toggle";
+import { SidebarProvider, SidebarTrigger } from "~/components/ui/sidebar";
+import { AppSidebar } from "~/components/layout/app-sidebar";
+import { ModeToggle } from "~/components/layout/mode-toggle";
 import { ChevronRight as ChevronRightIcon, Clock as ClockIcon } from "lucide-react";
 import { getFeedMetrics } from "~/lib/api";
 import { relativeTime } from "~/lib/utils";
-import type { Route } from "./+types/DashboardLayout";
+import type { Route } from "./+types/dashboard-layout";
 
 export async function loader({ request }: Route.LoaderArgs) {
   try {
@@ -41,7 +41,10 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
                   : "Tổng quan";
 
   return (
-    <SidebarProvider className="h-screen overflow-hidden flex bg-background">
+    <SidebarProvider
+      className="h-screen overflow-hidden flex bg-background"
+      style={{ "--sidebar-width": "200px" } as React.CSSProperties}
+    >
       <AppSidebar />
       
       <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
@@ -49,6 +52,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
         <header className="h-12 border-b border-border/50 bg-background flex items-center justify-between px-5 shrink-0 sticky top-0 z-20">
           {/* Trái: breadcrumb */}
           <div className="flex items-center gap-1.5 text-[13px]">
+            <SidebarTrigger className="md:hidden mr-1.5" aria-label="Mở menu điều hướng" />
             <span className="text-muted-foreground">TechScout</span>
             <ChevronRightIcon className="w-3.5 h-3.5 text-muted-foreground/40" />
             <span className="font-medium text-foreground">{pageLabel}</span>

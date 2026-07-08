@@ -5,7 +5,7 @@ import { Badge } from "~/components/ui/badge";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { relativeTime } from "~/lib/utils";
-import { ImpactBar } from "~/components/impact-bar";
+import { ImpactBar } from "~/components/shared/impact-bar";
 import { ArrowLeft as ArrowLeftIcon, Globe as GlobeIcon, ExternalLink as ExternalLinkIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { SENTIMENT_CLASSES, CATEGORY_STYLES } from "~/lib/constants";

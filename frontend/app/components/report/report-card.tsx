@@ -5,7 +5,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
 import { relativeTime } from "~/lib/utils";
-import { ImpactBar } from "~/components/impact-bar";
+import { ImpactBar } from "~/components/shared/impact-bar";
 import { Globe as GlobeIcon, ChevronDown, ChevronUp, CheckSquare, Eye } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { SENTIMENT_CLASSES, CATEGORY_STYLES } from "~/lib/constants";
@@ -33,7 +33,7 @@ export function ReportCard({ report }: { report: ResearchReport }) {
   const categoryStyle = CATEGORY_STYLES[categoryKey];
 
   return (
-    <div className="flex flex-col bg-background border border-border/50 rounded-lg hover:border-border transition-colors overflow-hidden">
+    <div className="flex flex-col bg-background border border-border/50 rounded-lg hover:border-border motion-safe:transition-colors overflow-hidden">
       <div className="px-4 py-3 flex flex-col gap-2 shrink-0 border-b border-border/30">
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-wrap gap-1.5">
@@ -55,7 +55,7 @@ export function ReportCard({ report }: { report: ResearchReport }) {
               href={report.original_source} 
               target="_blank" 
               rel="noopener noreferrer" 
-              className="hover:underline inline-flex items-center gap-1 hover:text-primary transition-colors"
+              className="hover:underline inline-flex items-center gap-1 hover:text-primary motion-safe:transition-colors"
             >
               {report.title}
               <GlobeIcon className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
@@ -94,12 +94,14 @@ export function ReportCard({ report }: { report: ResearchReport }) {
       <div className="px-4 py-3.5 flex-1 flex flex-col gap-4 text-[12px]">
           <div className="flex flex-col gap-1">
           <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">Tóm tắt điều hành</span>
-          <p className="leading-relaxed text-muted-foreground wrap-break-word">
+          <p id="summary-content" className="leading-relaxed text-muted-foreground break-words">
             {displaySummary}
             {summaryLength > 200 && (
               <button 
                 onClick={() => setIsSummaryExpanded(!isSummaryExpanded)} 
                 className="text-primary font-medium ml-1.5 hover:underline uppercase text-[10px]"
+                aria-expanded={isSummaryExpanded}
+                aria-controls="summary-content"
               >
                 {isSummaryExpanded ? "Thu gọn" : "Xem thêm"}
               </button>
@@ -112,12 +114,14 @@ export function ReportCard({ report }: { report: ResearchReport }) {
             <span className="text-[10px] font-medium uppercase tracking-widest text-primary flex items-center gap-1">
               <GlobeIcon className="w-3 h-3" /> Tác động thị trường Việt Nam
             </span>
-            <p className="leading-relaxed text-foreground italic">
+            <p id="impact-content" className="leading-relaxed text-foreground italic">
               &ldquo;{displayImpact}&rdquo;
               {impactLength > 150 && (
                 <button 
                   onClick={() => setIsImpactExpanded(!isImpactExpanded)} 
                   className="text-primary font-medium ml-1.5 hover:underline uppercase text-[10px] not-italic"
+                  aria-expanded={isImpactExpanded}
+                  aria-controls="impact-content"
                 >
                   {isImpactExpanded ? "Thu gọn" : "Xem thêm"}
                 </button>
@@ -142,7 +146,7 @@ export function ReportCard({ report }: { report: ResearchReport }) {
               {actions.length > 3 && (
                 <CollapsibleContent className="space-y-1.5 pt-1.5">
                   {actions.slice(3).map((action, index) => (
-                    <div key={index} className="flex items-start gap-2 text-foreground animate-in slide-in-from-top-1 duration-200">
+                    <div key={index} className="flex items-start gap-2 text-foreground motion-safe:animate-in motion-safe:slide-in-from-top-1 motion-safe:duration-200">
                       <CheckSquare className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
                       <span className="leading-tight text-[12px]">{action}</span>
                     </div>
@@ -152,7 +156,7 @@ export function ReportCard({ report }: { report: ResearchReport }) {
 
               {actions.length > 3 && (
                 <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-6 w-full text-[10px] font-medium uppercase tracking-wider gap-1 hover:bg-secondary mt-1">
+                  <Button variant="ghost" size="sm" className="min-h-11 w-full text-[10px] font-medium uppercase tracking-wider gap-1 hover:bg-secondary mt-1">
                     {isActionsOpen ? (
                       <>Thu gọn hành động <ChevronUp className="w-3 h-3" /></>
                     ) : (
@@ -169,7 +173,7 @@ export function ReportCard({ report }: { report: ResearchReport }) {
 
       <div className="px-4 py-2.5 border-t border-border/40 bg-secondary/10 flex items-center justify-between shrink-0">
         <ImpactBar score={report.impact_score} status="PROCESSED" />
-        <Button asChild variant="outline" size="sm" className="font-medium text-[11px] uppercase tracking-wider h-7 gap-1">
+        <Button asChild variant="outline" size="sm" className="font-medium text-[11px] uppercase tracking-wider min-h-11 gap-1">
           <Link to={`/reports/${report.id}`}>
             <Eye className="w-3 h-3" /> Chi tiết
           </Link>
