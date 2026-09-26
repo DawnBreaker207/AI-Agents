@@ -43,20 +43,20 @@ app.add_middleware(
 
 # API v1 routes
 from app.api.v1.health import router as health_router
-from app.api.v1.chat import router as chat_router
 from app.api.v1.news import router as news_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.sources import router as sources_router
 from app.api.v1.whitelist import router as whitelist_router
+from app.api.v1.aliases import router as aliases_router
 from app.api.v1.pipeline import router as pipeline_router
 from app.api.v1.metrics import router as metrics_router
 
 app.include_router(health_router)
-app.include_router(chat_router)
 app.include_router(news_router)
 app.include_router(reports_router)
 app.include_router(sources_router)
 app.include_router(whitelist_router)
+app.include_router(aliases_router)
 app.include_router(pipeline_router)
 app.include_router(metrics_router)
 

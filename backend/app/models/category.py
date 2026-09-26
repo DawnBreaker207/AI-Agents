@@ -11,3 +11,12 @@ class TopicWhitelist(Base):
     force_keep  = Column(Boolean, default=False)
     # True = always analyze (KEEP) even if impact_score < 8
     is_active   = Column(Boolean, default=True)
+
+
+class RoleAlias(Base):
+    """Từ điển đồng nghĩa vai trò cho Job Search (4.2) — quản lý qua UI."""
+    __tablename__ = "role_alias"
+    id             = Column(Integer, primary_key=True, index=True)
+    canonical_role = Column(String(200), nullable=False)  # VD: "Backend Developer"
+    alias          = Column(String(200), nullable=False, unique=True)  # VD: "Server-side Engineer"
+    is_active      = Column(Boolean, default=True)

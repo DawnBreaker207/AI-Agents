@@ -46,24 +46,6 @@ export const getHealth = () =>
   apiFetch<{ status: string; agent: string }>("/health");
 
 /**
- * POST /research - Start research pipeline on a new topic
- */
-export const startResearch = (topic: string, force_refresh = false) =>
-  apiFetch<{ status: string; topic: string }>("/research", {
-    method: "POST",
-    body: JSON.stringify({ topic, force_refresh }),
-  });
-
-/**
- * POST /chat - Chat with the AI Analyst agent
- */
-export const chatWithAgent = (prompt: string, category = "all") =>
-  apiFetch<{ answer: string }>("/chat", {
-    method: "POST",
-    body: JSON.stringify({ prompt, category }),
-  });
-
-/**
  * GET /api/news/:status - Get news filtered by status with pagination
  */
 export const getNewsByStatus = (status: string, page = 1, size = 20) =>
@@ -109,10 +91,10 @@ export const getReportById = (id: string | number) =>
   apiFetch<ResearchReport>(`/api/reports/${id}`);
 
 /**
- * GET /api/reports/strategic - Get strategic research reports
+ * GET /api/reports/strategic - Get strategic research reports (endpoint gộp, 2.4)
  */
-export const getStrategicReports = () =>
-  apiFetch<ResearchReport[]>("/api/reports/strategic");
+export const getStrategicReports = (scope: "all" | "strategic" | "history" = "all") =>
+  apiFetch<ResearchReport[]>(`/api/reports/strategic?scope=${scope}`);
 
 /**
  * GET /api/sources - Get RSS feed sources
@@ -189,6 +171,12 @@ export interface JobResult {
   posted_at: string | null;
   salary: string;
   tags: string[];
+  // Auto-verify từ backend (có sẵn ngay lúc search, không cần bấm tay)
+  deadline_status?: "OPEN" | "EXPIRED" | "UNKNOWN";
+  deadline_date?: string | null;
+  legit_flag?: "OK" | "SUSPICIOUS" | "UNKNOWN";
+  legit_reason?: string;
+  verified?: boolean;
 }
 
 export const getJobWatches = () =>
@@ -202,7 +190,35 @@ export const addJobWatch = (position: string, level: string, location_type: stri
 export const deleteJobWatch = (watchId: number) =>
   apiFetch<{ id: number }>(`/api/jobs/watch/${watchId}`, { method: "DELETE" });
 
-export const searchJobs = (keyword: string, location_type: string, level: string, city: string) => {
+export const searchJobs = (keyword: string, location_type: string, level: string, city: string, sort?: string) => {
   const params = new URLSearchParams({ keyword, location_type, level, city });
+  if (sort) params.set("sort", sort);
   return apiFetch<JobResult[]>(`/api/jobs/search?${params}`);
 };
+
+export const verifyJob = (url: string, deep = false) =>
+  apiFetch<{ url: string; deadline_status: string; deadline_date: string | null;
+    posted_at: string | null; legit_flag: string; legit_reason: string }>(
+    `/api/jobs/${encodeURIComponent(url)}/verify${deep ? "?deep=true" : ""}`,
+    { method: "POST" },
+  );
+
+// ── Role Alias API (4.2) ─────────────────────────────────────────────────────
+
+export interface RoleAlias {
+  id: number;
+  canonical_role: string;
+  alias: string;
+  is_active: boolean;
+}
+
+export const getAliases = () =>
+  apiFetch<RoleAlias[]>("/api/aliases");
+
+export const addAlias = (canonical_role: string, alias: string) => {
+  const params = new URLSearchParams({ canonical_role, alias });
+  return apiFetch<{ status: string; alias: string }>(`/api/aliases?${params}`, { method: "POST" });
+};
+
+export const deleteAlias = (aliasId: number) =>
+  apiFetch<{ status: string }>(`/api/aliases/${aliasId}`, { method: "DELETE" });

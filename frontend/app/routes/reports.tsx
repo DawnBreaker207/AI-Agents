@@ -1,5 +1,5 @@
 import type { Route } from "./+types/reports";
-import { getStrategicReports, getReportHistory } from "~/lib/api";
+import { getStrategicReports } from "~/lib/api";
 import { FileText, Search, Filter } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -14,15 +14,12 @@ export async function loader({ request }: Route.LoaderArgs) {
   const category = url.searchParams.get("category") || "all";
 
   try {
-    const [strategic, history] = await Promise.all([
-      getStrategicReports(),
-      getReportHistory()
-    ]);
+    // Endpoint gộp (2.4): 1 lần gọi, không merge/dedupe ở client nữa
+    const fetched = await getStrategicReports("all");
 
     // Combine and deduplicate reports
-    const allReports = [...strategic, ...history];
     const seen = new Set<number>();
-    let reports = allReports.filter(r => {
+    let reports = fetched.filter(r => {
       // Bắt buộc phải có nguồn (link)
       const hasSource = (r.original_source && r.original_source.trim() !== "") || (r.source_citations && r.source_citations.length > 0);
       if (!hasSource) return false;
@@ -42,7 +39,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
     if (category && category !== "all") {
       reports = reports.filter(r => {
-        const rawCategory = r.categories?.[0] || r.tags?.[0] || "OTHER";
+        const rawCategory = r.category || "OTHER";
         return rawCategory === category;
       });
     }

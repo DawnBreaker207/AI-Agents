@@ -190,6 +190,7 @@ class DeepAnalysisStage:
                 pending_news_id=news.id,
                 title=news.title,
                 original_source=news.url,
+                category=news.category,
                 executive_summary=str(
                     raw.get("deep_analysis_text", result_data.get("analysis", ""))
                 )[:2000],

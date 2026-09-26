@@ -1,7 +1,8 @@
+import asyncio
 import json
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.brain import BrainService
@@ -20,7 +21,7 @@ CRITICAL_KEYWORDS = [
 ]
 
 LAYOFF_KEYWORDS = [
-    "layoff", "laid off", "sa thải", "retrenchment",
+    "layoff", "layoffs", "lay off", "lays off", "laid off", "sa thải", "retrenchment",
     "job cut", "workforce reduction", "headcount"
 ]
 
@@ -126,18 +127,64 @@ class GatekeeperStage:
         self.notifier = DiscordNotifier()
 
     async def run(self, db: AsyncSession) -> list[int]:
-        result = await db.execute(
-            select(PendingNews).where(PendingNews.status == "PENDING").limit(settings.GATEKEEPER_BATCH_SIZE)
+        # Đếm tổng PENDING để đặt guard chống vòng lặp không hội tụ
+        count_result = await db.execute(
+            select(func.count()).select_from(PendingNews).where(PendingNews.status == "PENDING")
         )
-        batch = result.scalars().all()
-        if not batch:
+        initial_pending = count_result.scalar_one_or_none() or 0
+        if initial_pending == 0:
             logger.info("Gatekeeper: No PENDING articles found.")
             return []
+
+        # ponytail: cap 200 tin/run, tránh chạy vô hạn nếu pipeline dừng lâu
+        if initial_pending > 200:
+            logger.warning(
+                f"Gatekeeper: quá nhiều tin tồn đọng ({initial_pending}), "
+                f"có thể pipeline đã dừng lâu — kiểm tra scheduler. "
+                f"Chỉ xử lý 200 tin trong lần chạy này."
+            )
+        max_loops = min(initial_pending, 200) // settings.GATEKEEPER_BATCH_SIZE + 5
 
         wl_result = await db.execute(
             select(TopicWhitelist).where(TopicWhitelist.is_active == True)
         )
         whitelist = wl_result.scalars().all()
+
+        all_urgent_ids: list[int] = []
+        all_keep_ids: list[int] = []
+        loops = 0
+        while True:
+            loops += 1
+            if loops > max_loops:
+                logger.warning(
+                    "Gatekeeper: dừng sớm do nghi ngờ vòng lặp không hội tụ — kiểm tra model/API"
+                )
+                break
+            result = await db.execute(
+                select(PendingNews)
+                .where(PendingNews.status == "PENDING")
+                .order_by(PendingNews.published_at.desc().nullslast())
+                .limit(settings.GATEKEEPER_BATCH_SIZE)
+            )
+            batch = result.scalars().all()
+            if not batch:
+                break
+            urgent_ids, keep_ids = await self._process_batch(batch, whitelist, db)
+            all_urgent_ids.extend(urgent_ids)
+            all_keep_ids.extend(keep_ids)
+            await asyncio.sleep(settings.LLM_CALL_DELAY)
+
+        if all_urgent_ids or all_keep_ids:
+            from app.core.events import news_broadcaster
+            news_broadcaster.broadcast({"type": "new_news"})
+
+        logger.info(
+            f"Gatekeeper: {len(all_urgent_ids)} KEEP_URGENT, "
+            f"{len(all_keep_ids)} KEEP, triggering Stage 3."
+        )
+        return all_urgent_ids + all_keep_ids
+
+    async def _process_batch(self, batch, whitelist, db: AsyncSession) -> tuple[list[int], list[int]]:
 
         payload = [
             {"id": n.id, "title": n.title, "snippet": (n.snippet or "")[:300]}
@@ -172,15 +219,24 @@ class GatekeeperStage:
         response = await self.brain.call_ai_async(messages, model_tier="low", force_json=True)
 
         try:
-            parsed = json.loads(response)
+            parsed = json.loads(response or "{}")
             validated = FilterResponse.model_validate(parsed)
             signals = validated.signals
         except Exception as e:
             logger.error(f"Gatekeeper: JSON parse/validation error: {e}")
+            for news in batch:
+                news.gatekeeper_fail_count = (news.gatekeeper_fail_count or 0) + 1
+                if news.gatekeeper_fail_count >= 3:
+                    news.status = "WATCH"  # an toàn hơn TRASH — không mất tin
+                    logger.warning(
+                        f"News #{news.id} chuyển WATCH sau {news.gatekeeper_fail_count} "
+                        f"lần Gatekeeper lỗi JSON — có thể do model free trả sai format."
+                    )
+            await db.commit()
             signals = []
 
-        urgent_ids = []
-        keep_ids = []
+        urgent_ids: list[int] = []
+        keep_ids: list[int] = []
 
         for signal in signals:
             news_id = signal.id
@@ -204,7 +260,8 @@ class GatekeeperStage:
                     if wl.force_keep and score < 8:
                         score = 8.0
 
-            is_critical = any(kw in combined for kw in CRITICAL_KEYWORDS)
+            # Layoff đơn thuần cũng tính là khẩn cấp (không chỉ cụm "mass layoff")
+            is_critical = any(kw in combined for kw in CRITICAL_KEYWORDS + LAYOFF_KEYWORDS)
 
             if not matched:
                 matched = [CATEGORY_FALLBACK_TAGS.get(category, "Tech News")]
@@ -246,12 +303,4 @@ class GatekeeperStage:
                     )
 
         await db.commit()
-        if urgent_ids or keep_ids:
-            from app.core.events import news_broadcaster
-            news_broadcaster.broadcast({"type": "new_news"})
-
-        logger.info(
-            f"Gatekeeper: {len(urgent_ids)} KEEP_URGENT, "
-            f"{len(keep_ids)} KEEP, triggering Stage 3."
-        )
-        return urgent_ids + keep_ids
+        return urgent_ids, keep_ids

@@ -16,6 +16,7 @@ class ResearchReport(Base):
     strategic_action_items = Column(JSON, nullable=True)  # List[str]
     impact_score = Column(Float, default=5.0)
     sentiment = Column(String(20), default="NEUTRAL")  # POSITIVE|NEUTRAL|NEGATIVE
+    category = Column(String(50), nullable=True)  # copy từ PendingNews.category khi Stage 3 chạy
     tags = Column(JSON, nullable=True)
     raw_analysis = Column(JSON, nullable=True)
     source_citations = Column(JSON, nullable=True)

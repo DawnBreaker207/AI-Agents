@@ -17,6 +17,7 @@ class ResearchReportSchema(BaseModel):
     research_articles: Optional[List[Dict]] = []
 
     categories: Optional[List[str]] = []
+    category: Optional[str] = None  # category thật từ Gatekeeper (2.2), categories là legacy/tags
     regions: Optional[List[str]] = []
     sentiment: Optional[str] = "Trung tính"
     sources: List[str] = []

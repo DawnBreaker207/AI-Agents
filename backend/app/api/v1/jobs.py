@@ -3,6 +3,7 @@ import os
 import re as _re
 from typing import Optional, List
 from fastapi import APIRouter, Query, HTTPException, Depends
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import httpx
@@ -23,6 +24,74 @@ def _build_search_terms(keyword: str, level: Optional[str]) -> str:
     if keyword and keyword.strip():
         terms.append(keyword.strip())
     return " ".join(terms) if terms else "IT"
+
+
+async def _expand_queries(keyword: str, db: AsyncSession) -> List[str]:
+    """4.2 — mở rộng keyword bằng role_alias (tối đa 2 variant để tránh spam query)."""
+    from app.models.category import RoleAlias
+    kw = (keyword or "").strip()
+    if not kw:
+        return ["IT"]
+    try:
+        result = await db.execute(
+            select(RoleAlias).where(RoleAlias.is_active == True).limit(50)
+        )
+        rows = result.scalars().all()
+    except Exception:
+        return [kw]
+    variants = [kw]
+    for row in rows:
+        canon, alias = str(row.canonical_role or ""), str(row.alias or "")
+        if canon.lower() == kw.lower() and alias and alias not in variants:
+            variants.append(alias)
+        elif alias.lower() == kw.lower() and canon and canon not in variants:
+            variants.append(canon)
+        if len(variants) >= 2:
+            break
+    return variants
+
+
+_LEVEL_WORDS: dict[str, list[str]] = {
+    "intern": ["intern", "thực tập", "thuc tap"],
+    "junior": ["junior", "fresher", "entry"],
+    "middle": ["middle", "mid-level", "mid level"],
+    "senior": ["senior"],
+    "lead": ["lead", "principal", "staff engineer", "architect", "manager"],
+}
+_LEVEL_MIN_YEARS: dict[str, int] = {"intern": 0, "junior": 0, "middle": 2, "senior": 3, "lead": 5}
+_LEVEL_MAX_YEARS: dict[str, int] = {"intern": 1, "junior": 3, "middle": 5, "senior": 99, "lead": 99}
+_YEARS_PATTERN = _re.compile(r"(\d+)\s*\+\s*(năm|years?|yrs?)|(\d+)\s*(năm|years?|yrs?)")
+
+
+def _normalize_level(level: Optional[str]) -> Optional[str]:
+    if not level or level in ("Tất cả", ""):
+        return None
+    low = level.lower()
+    for key, words in _LEVEL_WORDS.items():
+        if key in low or any(w in low for w in words):
+            return key
+    return None
+
+
+def _post_filter_level(jobs: List[dict], level: Optional[str]) -> List[dict]:
+    """4.2 — loại job ghi rõ cấp bậc khác với level yêu cầu; job không ghi level thì giữ."""
+    want = _normalize_level(level)
+    if not want:
+        return jobs
+    kept = []
+    for job in jobs:
+        text = f"{job.get('title', '')} {job.get('description', '')}".lower()
+        mentioned = {k for k, words in _LEVEL_WORDS.items()
+                     if any(w in text for w in words)}
+        if mentioned and want not in mentioned:
+            continue  # ghi rõ level khác → loại
+        years = [int(n) for tup in _YEARS_PATTERN.findall(text) for n in tup[:1] + tup[2:3] if n.isdigit()]
+        if years:
+            top = max(years)
+            if not (_LEVEL_MIN_YEARS[want] <= top <= _LEVEL_MAX_YEARS[want]):
+                continue
+        kept.append(job)
+    return kept
 
 
 def _strip_html(text: str, limit: int = 300) -> str:
@@ -150,9 +219,11 @@ async def _fetch_themuse(client: httpx.AsyncClient, q: str) -> List[dict]:
     """The Muse — US/global tech jobs, free public API (no key required)."""
     print(f"[The Muse] Fetching q='{q}'", flush=True)
     try:
+        # Không gửi param `level`: lọc cấp bậc ở tầng post-filter (4.2),
+        # tránh hardcode "Entry Level" bất kể user chọn gì.
         r = await client.get(
             "https://www.themuse.com/api/public/jobs",
-            params={"category": "Engineering", "level": "Entry Level", "page": 0},
+            params={"category": "Engineering", "page": 0},
             timeout=12,
         )
         if r.status_code != 200:
@@ -280,6 +351,34 @@ def _detect_source(url: str) -> str:
     return "Khác"
 
 
+# Thành phố VN thường gặp trong tin tuyển dụng (regex, không dấu/có dấu)
+_CITY_PATTERNS: list[tuple[str, str]] = [
+    ("Hà Nội", r"hà\s*nội|ha\s*noi|hanoi"),
+    ("TP. Hồ Chí Minh", r"hồ\s*chí\s*minh|ho\s*chi\s*minh|tp\.?\s*hcm|sài\s*gòn|sai\s*gon|quận\s*[0-9]|thủ\s*đức|thu\s*duc"),
+    ("Đà Nẵng", r"đà\s*nẵng|da\s*nang|danang"),
+    ("Hải Phòng", r"hải\s*phòng|hai\s*phong|haiphong"),
+    ("Cần Thơ", r"cần\s*thơ|can\s*tho|cantho"),
+    ("Huế", r"huế|hue(?!s)"),
+    ("Nha Trang", r"nha\s*trang"),
+    ("Bình Dương", r"bình\s*dương|binh\s*duong"),
+    ("Đồng Nai", r"đồng\s*nai|dong\s*nai"),
+    ("Vũng Tàu", r"vũng\s*tàu|vung\s*tau"),
+    ("Hải Dương", r"hải\s*dương|hai\s*duong"),
+    ("Bắc Ninh", r"bắc\s*ninh|bac\s*ninh"),
+    ("Nghệ An", r"nghệ\s*an|nghe\s*an|vinh\b"),
+    ("Remote", r"remote|làm\s*việc\s*từ\s*xa|work\s*from\s*home|wfh"),
+]
+
+
+def _extract_location(snippet: str) -> str:
+    """Trích địa điểm thật từ snippet DDGS — không echo city_term (4.3)."""
+    lowered = (snippet or "").lower()
+    for label, pattern in _CITY_PATTERNS:
+        if _re.search(pattern, lowered):
+            return label
+    return "Chưa xác định"
+
+
 def _clean_title(title: str) -> str:
     for _, label in DOMESTIC_SITES:
         title = title.replace(f" - {label}", "").replace(f" | {label}", "")
@@ -353,7 +452,7 @@ def _search_one_site(domain: str, label: str, q: str,
                 id="",  # assigned later
                 title=parsed_title or _clean_title(raw_title),
                 company=parsed_company or "N/A",
-                location=city_term or "Việt Nam",
+                location=_extract_location(r.get("body", "")),
                 location_type="domestic",
                 work_model="on-site",
                 url=url,
@@ -389,12 +488,91 @@ async def _fetch_domestic_ddgs(q: str, city: Optional[str]) -> List[dict]:
             url = job.get("url", "")
             if url and url not in seen_urls:
                 seen_urls.add(url)
-                job["id"] = f"ddg-{len(all_results)}"
                 all_results.append(job)
 
-    print(f"[DOMESTIC] Done: {len(all_results)} unique jobs from {len(_SITE_CONFIGS)} sites.\n", flush=True)
-    logger.info(f"Domestic search complete: {len(all_results)} jobs.")
-    return all_results
+    # HEAD-check: loại link chết/redirect homepage trước khi trả về
+    # (Semaphore tránh burst request vào 1 site; soft-404 check ở tầng verify Jina)
+    verified: List[dict] = []
+    if all_results:
+        sem = asyncio.Semaphore(6)
+        from app.utils.link_check import is_article_accessible as _check
+
+        async def _guarded(job, client):
+            async with sem:
+                return job, await _check(job.get("url", ""), client)
+
+        async with httpx.AsyncClient() as client:
+            checks = await asyncio.gather(*[
+                _guarded(job, client) for job in all_results
+            ])
+        dead_by_site: dict = {}
+        for job, (ok, reason) in checks:
+            if ok:
+                job["id"] = f"ddg-{len(verified)}"
+                verified.append(job)
+            else:
+                site = job.get("source", "?")
+                dead_by_site[site] = dead_by_site.get(site, 0) + 1
+                logger.info(f"Domestic HEAD-check loại link chết [{site}]: {reason} — {job.get('url', '')}")
+        if dead_by_site:
+            print(f"[DOMESTIC] HEAD-check loại {len(all_results) - len(verified)} link chết: {dead_by_site}", flush=True)
+
+    print(f"[DOMESTIC] Done: {len(verified)} unique jobs from {len(_SITE_CONFIGS)} sites.\n", flush=True)
+    logger.info(f"Domestic search complete: {len(verified)} jobs.")
+    return verified
+
+
+# Verify tự động ngay lúc search (không cần nút bấm tay):
+# chỉ verify N job đầu để tránh chậm (mỗi job 1 lần fetch Jina, chạy song song).
+_TOP_VERIFY_COUNT = 10
+_VERIFY_CONCURRENCY = 4
+
+_VERIFY_DEFAULTS = {
+    "deadline_status": "UNKNOWN",
+    "deadline_date": None,
+    "legit_flag": "UNKNOWN",
+    "legit_reason": "",
+    "verified": False,
+}
+
+
+async def _verify_top_jobs(jobs: List[dict], limit: int = _TOP_VERIFY_COUNT) -> None:
+    """Gắn deadline/legit/posted_at vào N job đầu tiên (mutate tại chỗ)."""
+    import asyncio
+    from app.services.job_verifier import fetch_and_verify_job
+
+    for job in jobs:
+        job.update({k: v for k, v in _VERIFY_DEFAULTS.items() if k not in job})
+        if job.get("posted_at"):
+            job["posted_at_verified"] = False
+
+    targets = jobs[:limit]
+    if not targets:
+        return
+    sem = asyncio.Semaphore(_VERIFY_CONCURRENCY)
+
+    async def _guarded(job: dict):
+        async with sem:
+            try:
+                return job, await fetch_and_verify_job(job.get("url", ""))
+            except Exception as e:
+                logger.warning(f"Auto-verify lỗi [{job.get('url', '')}]: {e}")
+                return job, {}
+
+    print(f"[VERIFY] Auto-verify {len(targets)}/{len(jobs)} jobs đầu...", flush=True)
+    for job, res in await asyncio.gather(*[_guarded(j) for j in targets]):
+        if not res:
+            continue
+        job["deadline_status"] = res.get("deadline_status", "UNKNOWN")
+        job["deadline_date"] = res.get("deadline_date")
+        job["legit_flag"] = res.get("legit_flag", "UNKNOWN")
+        job["legit_reason"] = res.get("legit_reason", "")
+        if not job.get("posted_at") and res.get("posted_at"):
+            job["posted_at"] = res["posted_at"]
+            job["posted_at_verified"] = True
+        job["verified"] = True
+    n_ok = sum(1 for j in targets if j.get("verified"))
+    print(f"[VERIFY] Xong: {n_ok}/{len(targets)} jobs có kết quả verify.", flush=True)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -405,36 +583,46 @@ async def search_jobs(
     location_type: str = Query("domestic", description="'domestic' hoặc 'overseas'"),
     level: Optional[str] = Query(None, description="Trình độ (VD: Intern, Junior, Senior)"),
     city: Optional[str] = Query(None, description="Thành phố trong nước (VD: Hà Nội)"),
+    sort: Optional[str] = Query(None, description="'newest' để sắp xếp tin mới nhất trước (4.4)"),
+    db: AsyncSession = Depends(get_db),
 ):
     print(f"\n[SEARCH] keyword={keyword!r} type={location_type} level={level} city={city}", flush=True)
     logger.info(f"Job search: keyword={keyword!r} location_type={location_type} level={level} city={city}")
 
-    q = _build_search_terms(keyword, level)
-    print(f"[SEARCH] Effective query: {q!r}", flush=True)
+    variants = await _expand_queries(keyword, db)
+    if len(variants) > 1:
+        print(f"[SEARCH] Alias expansion: {variants}", flush=True)
     results: List[dict] = []
+    seen_all: set = set()
 
     if location_type == "overseas":
         print("[SEARCH] Mode: overseas — calling all overseas APIs in parallel", flush=True)
         async with httpx.AsyncClient() as client:
             from asyncio import gather
-            batches = await gather(
-                _fetch_remotive(client, q),
-                _fetch_arbeitnow(client, q),
-                _fetch_jobicy(client, q),
-                _fetch_themuse(client, q),
-            )
-            seen: set = set()
+            batches = await gather(*[
+                fn(client, _build_search_terms(v, level))
+                for v in variants
+                for fn in (_fetch_remotive, _fetch_arbeitnow, _fetch_jobicy, _fetch_themuse)
+            ])
             for batch in batches:
                 for job in batch:
                     url = job.get("url", "")
-                    if url and url not in seen:
-                        seen.add(url)
+                    if url and url not in seen_all:
+                        seen_all.add(url)
                         results.append(job)
         print(f"[SEARCH] Overseas done: {len(results)} unique jobs", flush=True)
 
     elif location_type == "domestic":
         print("[SEARCH] Mode: domestic — per-site DDGS search", flush=True)
-        results = await _fetch_domestic_ddgs(q, city)
+        for v in variants:
+            q = _build_search_terms(v, level)
+            print(f"[SEARCH] Effective query: {q!r}", flush=True)
+            for job in await _fetch_domestic_ddgs(q, city):
+                url = job.get("url", "")
+                if url and url not in seen_all:
+                    seen_all.add(url)
+                    job["id"] = f"ddg-{len(results)}"
+                    results.append(job)
 
     else:
         raise HTTPException(
@@ -442,8 +630,47 @@ async def search_jobs(
             detail="location_type không hợp lệ. Dùng 'domestic' hoặc 'overseas'.",
         )
 
+    before = len(results)
+    results = _post_filter_level(results, level)
+    if len(results) != before:
+        print(f"[SEARCH] Level post-filter: {before} → {len(results)} (level={level!r})", flush=True)
+
+    await _verify_top_jobs(results)
+
     print(f"[SEARCH] ✓ Returning {len(results)} jobs\n", flush=True)
+    if sort == "newest":
+        # posted_at ISO — job thiếu ngày đăng xếp cuối
+        results.sort(key=lambda j: j.get("posted_at") or "", reverse=True)
     return {"message": f"Tìm thấy {len(results)} công việc.", "data": results}
+
+
+# ── Job Verify (deadline + legit) ────────────────────────────────────────────
+
+class VerifyRequest(BaseModel):
+    url: str
+    deep: bool = False  # True → bật thêm LLM fallback (Tầng C)
+
+
+@router.post("/api/jobs/verify", summary="Kiểm tra hạn nộp + dấu hiệu lừa đảo của 1 job")
+async def verify_job(payload: VerifyRequest):
+    from app.services.job_verifier import fetch_and_verify_job
+    if not payload.url or not payload.url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="URL không hợp lệ.")
+    result = await fetch_and_verify_job(payload.url, deep=payload.deep)
+    return {"message": "Đã kiểm tra.", "data": {"url": payload.url, **result}}
+
+
+@router.post("/api/jobs/{job_ref}/verify", summary="Verify job theo URL (percent-encoded) trong path")
+async def verify_job_by_ref(job_ref: str, deep: bool = False):
+    """job_ref = URL tin tuyển dụng đã percent-encode (vd dùng encodeURIComponent).
+    Giữ endpoint body /api/jobs/verify làm alias gọn hơn."""
+    import urllib.parse
+    from app.services.job_verifier import fetch_and_verify_job
+    url = urllib.parse.unquote(job_ref)
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="URL trong path không hợp lệ (cần percent-encode).")
+    result = await fetch_and_verify_job(url, deep=deep)
+    return {"message": "Đã kiểm tra.", "data": {"url": url, **result}}
 
 
 # ── Job Watch ─────────────────────────────────────────────────────────────────

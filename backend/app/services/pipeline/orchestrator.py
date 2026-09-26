@@ -21,12 +21,12 @@ async def _get_status(news_id: int) -> str:
         return news.status if news else ""
 
 
-async def run_pipeline():
-    logger.info("Pipeline starting...")
+async def run_pipeline(source_filter: str | None = None):
+    logger.info(f"Pipeline starting... (source_filter={source_filter})")
 
     try:
         async with AsyncSessionLocal() as db:
-            await ScoutStage().run(db)
+            await ScoutStage().run(db, source_filter=source_filter)
     except Exception as e:
         logger.error(f"Stage 1 (Scout) failed: {e}", exc_info=True)
         return  # Không chạy tiếp nếu Scout lỗi
@@ -68,6 +68,11 @@ async def run_pipeline():
     logger.info("Pipeline completed.")
 
 
+async def run_high_priority_pipeline():
+    """Quét dày nhóm nguồn 'high' — Gatekeeper/Stage 3 xử lý PENDING như pipeline chính."""
+    await run_pipeline(source_filter="high")
+
+
 def start_cron_jobs():
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
@@ -75,8 +80,16 @@ def start_cron_jobs():
         hours=settings.PIPELINE_INTERVAL_HOURS,
         id="main_pipeline"
     )
+    scheduler.add_job(
+        run_high_priority_pipeline, "interval",
+        minutes=settings.HIGH_PRIORITY_SCAN_MINUTES,
+        id="high_priority_scan"
+    )
     scheduler.start()
-    logger.info(f"Scheduler started: pipeline running every {settings.PIPELINE_INTERVAL_HOURS} hours.")
+    logger.info(
+        f"Scheduler started: pipeline every {settings.PIPELINE_INTERVAL_HOURS}h, "
+        f"high-priority scan every {settings.HIGH_PRIORITY_SCAN_MINUTES}m."
+    )
 
 
 async def execute_workflow(topic: str):

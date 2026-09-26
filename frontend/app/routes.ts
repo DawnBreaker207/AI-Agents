@@ -6,7 +6,6 @@ export default [
         route("feed", "routes/feed.tsx"),
         route("reports", "routes/reports.tsx"),
         route("reports/:id", "routes/report-detail.tsx"),
-        route("research", "routes/research.tsx"),
         route("sources", "routes/sources.tsx"),
         route("dashboard", "routes/dashboard.tsx"),
         route("jobs", "routes/jobs.tsx"),

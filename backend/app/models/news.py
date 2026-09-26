@@ -19,3 +19,4 @@ class PendingNews(Base):
     # Assigned by AI: "AI_RESEARCH" | "LAYOFF" | "VN_MARKET" | "DEV_TOOLS"
     #                 | "SECURITY" | "BUSINESS" | "OTHER"
     matched_topics = Column(JSON, nullable=True)   # List[str] — matched whitelist topics
+    gatekeeper_fail_count = Column(Integer, default=0)  # Số lần Gatekeeper lỗi JSON liên tiếp

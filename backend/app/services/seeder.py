@@ -2,7 +2,7 @@ import logging
 from sqlalchemy import select
 from app.database import AsyncSessionLocal, init_db
 from app.models.source import SourceList
-from app.models.category import TopicWhitelist
+from app.models.category import TopicWhitelist, RoleAlias
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +35,32 @@ RSS_SOURCES = [
     {"name": "DZone Java", "url": "https://feeds.dzone.com/java", "priority_weight": 1.6},
 ]
 
+HIGH_PRIORITY_SOURCES = {"Layoffs.fyi", "Reuters Tech", "TechCrunch", "CNBC Tech"}
+
+# 4.2 — alias mặc định cho Job Search
+DEFAULT_ALIASES = [
+    {"canonical_role": "Backend Developer", "alias": "Server-side Engineer"},
+    {"canonical_role": "Backend Developer", "alias": "Backend Engineer"},
+    {"canonical_role": "Frontend Developer", "alias": "Frontend Engineer"},
+    {"canonical_role": "Frontend Developer", "alias": "Web Developer"},
+    {"canonical_role": "DevOps Engineer", "alias": "Site Reliability Engineer"},
+    {"canonical_role": "DevOps Engineer", "alias": "Platform Engineer"},
+    {"canonical_role": "Data Engineer", "alias": "Big Data Engineer"},
+    {"canonical_role": "QA Engineer", "alias": "Quality Assurance Engineer"},
+    {"canonical_role": "QA Engineer", "alias": "Tester"},
+    {"canonical_role": "Mobile Developer", "alias": "Android Developer"},
+    {"canonical_role": "Mobile Developer", "alias": "iOS Developer"},
+]
+
 DEFAULT_WHITELIST = [
-    {"topic": "Java Spring Boot", "boost_score": 2.0, "force_keep": True},
+    # Công ty ưu tiên cho fast lane breaking news (force_keep=True để Scout bắt ngay)
+    {"topic": "Oracle", "boost_score": 1.5, "force_keep": True},
+    {"topic": "Google", "boost_score": 1.5, "force_keep": True},
+    {"topic": "Meta", "boost_score": 1.5, "force_keep": True},
+    {"topic": "Amazon", "boost_score": 1.5, "force_keep": True},
+    {"topic": "Microsoft", "boost_score": 1.5, "force_keep": True},
+    {"topic": "Apple", "boost_score": 1.5, "force_keep": True},
+    {"topic": "Java Spring Boot", "boost_score": 2.0, "force_keep": True},    {"topic": "Java Spring Boot", "boost_score": 2.0, "force_keep": True},
     {"topic": "Angular", "boost_score": 2.0, "force_keep": True},
     {"topic": "Vietnam tech market", "boost_score": 2.0, "force_keep": True},
     {"topic": "thị trường công nghệ VN", "boost_score": 2.0, "force_keep": True},
@@ -54,6 +78,42 @@ async def auto_seed_db():
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(SourceList).limit(1))
         if result.scalar_one_or_none():
+            # Backfill scan_priority cho DB đã có dữ liệu (idempotent)
+            updated = 0
+            for name in HIGH_PRIORITY_SOURCES:
+                res = await db.execute(select(SourceList).where(SourceList.name == name))
+                src = res.scalar_one_or_none()
+                if src is not None and getattr(src, "scan_priority", None) != "high":
+                    src.scan_priority = "high"
+                    updated += 1
+            if updated:
+                await db.commit()
+                logger.info(f"Backfill scan_priority: {updated} nguồn → 'high'.")
+            # Backfill whitelist entries còn thiếu (vd công ty ưu tiên mới thêm)
+            added = 0
+            for wl in DEFAULT_WHITELIST:
+                res = await db.execute(
+                    select(TopicWhitelist).where(TopicWhitelist.topic == wl["topic"]))
+                if res.scalar_one_or_none() is None:
+                    db.add(TopicWhitelist(
+                        topic=wl["topic"], boost_score=wl["boost_score"],
+                        force_keep=wl["force_keep"], is_active=True))
+                    added += 1
+            if added:
+                await db.commit()
+                logger.info(f"Backfill whitelist: {added} topics mới.")
+            # Backfill role_alias mặc định (4.2)
+            added_alias = 0
+            for al in DEFAULT_ALIASES:
+                res = await db.execute(
+                    select(RoleAlias).where(RoleAlias.alias == al["alias"]))
+                if res.scalar_one_or_none() is None:
+                    db.add(RoleAlias(canonical_role=al["canonical_role"],
+                                     alias=al["alias"], is_active=True))
+                    added_alias += 1
+            if added_alias:
+                await db.commit()
+                logger.info(f"Backfill role_alias: {added_alias} alias mới.")
             return
 
         logger.info("Database trống. Bắt đầu tự động nạp (seeding) dữ liệu mẫu...")
@@ -64,12 +124,19 @@ async def auto_seed_db():
                 type="RSS",
                 is_active=True,
                 priority_weight=src["priority_weight"],
+                scan_priority="high" if src["name"] in HIGH_PRIORITY_SOURCES else "normal",
             ))
         for wl in DEFAULT_WHITELIST:
             db.add(TopicWhitelist(
                 topic=wl["topic"],
                 boost_score=wl["boost_score"],
                 force_keep=wl["force_keep"],
+                is_active=True,
+            ))
+        for al in DEFAULT_ALIASES:
+            db.add(RoleAlias(
+                canonical_role=al["canonical_role"],
+                alias=al["alias"],
                 is_active=True,
             ))
         await db.commit()

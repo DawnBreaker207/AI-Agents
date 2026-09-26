@@ -12,7 +12,6 @@ import {
 import { 
   Rss as RssIcon, 
   FileText as FileTextIcon, 
-  FlaskConical as FlaskConicalIcon, 
   Radio as RadioIcon, 
   LayoutDashboard as LayoutDashboardIcon,
   Radar as RadarIcon,
@@ -26,7 +25,6 @@ const MAIN_ITEMS = [
   { to: "/feed",      label: "Live News Feed",       icon: RssIcon,             badgeKey: "keep_urgent" as const },
   { to: "/jobs",      label: "Tìm kiếm việc làm",    icon: BriefcaseIcon,       badgeKey: null },
   { to: "/reports",   label: "Báo cáo chiến lược",   icon: FileTextIcon,        badgeKey: "processed" as const   },
-  { to: "/research",  label: "Nghiên cứu chuyên sâu",icon: FlaskConicalIcon,    badgeKey: null                   },
 ] as const;
 
 const CONFIG_ITEMS = [

@@ -1,22 +1,16 @@
-import { Link, useFetcher, useRevalidator } from "react-router";
-import { Input } from "~/components/ui/input";
-import { Button } from "~/components/ui/button";
-import { ScrollArea } from "~/components/ui/scroll-area";
-import { Badge } from "~/components/ui/badge";
+import { Link, useRevalidator } from "react-router";
 import {
-  Activity, Briefcase, Cpu, MessageSquare, Microscope,
-  Send, X,
+  Activity,
   ExternalLink, RefreshCcw, AlertTriangle,
   BarChart3, Zap, Clock
 } from "lucide-react";
-import { getStrategicReports, getReportHistory, chatWithAgent, getFeedMetrics, triggerPipeline, getJobWatches, addJobWatch, deleteJobWatch, API_BASE_URL } from "~/lib/api";
+import { getStrategicReports, getFeedMetrics, triggerPipeline, getJobWatches, addJobWatch, deleteJobWatch, API_BASE_URL } from "~/lib/api";
 import { useState, useEffect, useRef } from "react";
 import type { Route } from "./+types/dashboard";
-import type { ResearchReport, FeedMetrics } from "~/types";
+import type { FeedMetrics } from "~/types";
 import { relativeTime } from "~/lib/utils";
 import { getSentimentConfig, SENTIMENT_BORDER } from "~/lib/constants";
 import { toast } from "sonner";
-import { ReportColumn } from "~/components/report/report-column";
 import JobWatchWidget from "~/components/job/job-watch-widget";
 
 export const meta: Route.MetaFunction = () => [
@@ -26,24 +20,20 @@ export const meta: Route.MetaFunction = () => [
 
 export async function loader({ request }: Route.LoaderArgs) {
   try {
-    const [strategic, history, metrics, watches] = await Promise.all([
-      getStrategicReports(),
-      getReportHistory(),
+    const [strategic, metrics, watches] = await Promise.all([
+      getStrategicReports("all"),
       getFeedMetrics(),
       getJobWatches(),
     ]);
 
-    // Deduplicate and filter: chỉ giữ báo cáo có link gốc (nguyên tắc bắt buộc)
-    const seen = new Set<number>();
-    const allReports = [...strategic, ...history].filter(r => {
+    // Preview ngắn: 5 report mới nhất có nguồn — chi tiết đầy đủ ở /reports
+    const reports = strategic.filter(r => {
       const hasSource = (r.original_source && r.original_source.trim() !== "")
         || (r.source_citations && r.source_citations.length > 0);
-      if (!hasSource || seen.has(r.id)) return false;
-      seen.add(r.id);
-      return true;
-    });
+      return hasSource;
+    }).slice(0, 5);
 
-    return { reports: allReports, metrics, watches };
+    return { reports, metrics, watches };
   } catch (err) {
     console.error("Dashboard loader failed:", err);
     return {
@@ -57,16 +47,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const intent = formData.get("intent") as string;
-
-  if (intent === "chat") {
-    const prompt = formData.get("prompt") as string;
-    try {
-      const result = await chatWithAgent(prompt, "all");
-      return { answer: result.answer };
-    } catch {
-      return { answer: "Agent protocol error: Không thể truy cập chatbot phân tích lúc này." };
-    }
-  }
 
   if (intent === "trigger") {
     try {
@@ -106,12 +86,7 @@ export async function action({ request }: Route.ActionArgs) {
 export default function Dashboard({ loaderData }: Route.ComponentProps) {
   const { reports, metrics, watches } = loaderData;
   const { revalidate, state } = useRevalidator();
-  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isTriggering, setIsTriggering] = useState(false);
-  const [messages, setMessages] = useState<{ role: "ai" | "user"; text: string }[]>([
-    { role: "ai", text: "Chào! Tôi đang giám sát luồng báo cáo thị trường. Bạn muốn tôi phân tích điều gì?" }
-  ]);
-  const chatFetcher = useFetcher<{ answer: string }>();
 
   // SSE Realtime
   const revalidatorRef = useRef(revalidate);
@@ -123,13 +98,6 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
     };
     return () => sse.close();
   }, []);
-
-  // Collect chat response
-  useEffect(() => {
-    if (chatFetcher.data?.answer) {
-      setMessages(prev => [...prev, { role: "ai", text: chatFetcher.data!.answer }]);
-    }
-  }, [chatFetcher.data]);
 
   const handleTrigger = async () => {
     setIsTriggering(true);
@@ -148,26 +116,7 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
     }
   };
 
-  const handleChat = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const prompt = fd.get("prompt") as string;
-    if (!prompt.trim()) return;
-    setMessages(prev => [...prev, { role: "user", text: prompt }]);
-    chatFetcher.submit({ intent: "chat", prompt }, { method: "post" });
-    e.currentTarget.reset();
-  };
-
-  // Route reports to columns
-  const cols = { market: [] as ResearchReport[], jobs: [] as ResearchReport[], academic: [] as ResearchReport[], tech: [] as ResearchReport[] };
-  for (const r of reports) {
-    const txt = `${r.title} ${r.executive_summary ?? ""} ${(r.tags ?? []).join(" ")} ${(r.categories ?? []).join(" ")}`.toLowerCase();
-    if (/job|layoff|salary|employment|hiring|tuy[eể]n|ngh[eề]/.test(txt)) cols.jobs.push(r);
-    else if (/academic|research|paper|study|thesis|h[oọ]c thu[aậ]t/.test(txt)) cols.academic.push(r);
-    else if (/trend|framework|tool|ai_research|công ngh[eệ]|dev/.test(txt)) cols.tech.push(r);
-    else cols.market.push(r);
-  }
-
+  // Preview ngắn — phân loại chi tiết ở /reports, dashboard không tự vẽ lại
   const urgentCount = metrics.keep_urgent;
 
   return (
@@ -249,14 +198,26 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
       <div>
         <div className="flex items-center gap-2 mb-4">
           <Zap className="w-4 h-4 text-muted-foreground" />
-          <h2 className="text-[13px] font-medium text-foreground">Luồng Báo Cáo Chiến Lược</h2>
-          <Badge variant="outline" className="text-[10px] font-mono ml-auto">{reports.length} báo cáo (có dẫn chứng)</Badge>
+          <h2 className="text-[13px] font-medium text-foreground">Báo cáo mới nhất</h2>
+          <Link to="/reports" className="text-[12px] text-muted-foreground hover:text-foreground ml-auto">
+            Xem tất cả →
+          </Link>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <ReportColumn title="Market Pulse" icon={<Activity className="w-3.5 h-3.5 text-blue-500" />} color="blue" items={cols.market} />
-          <ReportColumn title="Việc làm & Nhân sự" icon={<Briefcase className="w-3.5 h-3.5 text-muted-foreground" />} color="accent" items={cols.jobs} />
-          <ReportColumn title="Nghiên cứu Học thuật" icon={<Microscope className="w-3.5 h-3.5 text-orange-500" />} color="orange" items={cols.academic} />
-          <ReportColumn title="Xu hướng Công nghệ" icon={<Cpu className="w-3.5 h-3.5 text-muted-foreground" />} color="accent" items={cols.tech} />
+        <div className="flex flex-col gap-2">
+          {reports.map(r => (
+            <Link key={r.id} to={`/reports/${r.id}`}
+              className="bg-background border border-border/50 rounded-lg px-4 py-3 hover:border-border transition-colors">
+              <p className="text-[13px] font-medium text-foreground leading-snug line-clamp-1">{r.title}</p>
+              {r.executive_summary && (
+                <p className="text-[12px] text-muted-foreground leading-relaxed line-clamp-1 mt-1">
+                  {r.executive_summary.slice(0, 160)}
+                </p>
+              )}
+            </Link>
+          ))}
+          {reports.length === 0 && (
+            <p className="text-[12px] text-muted-foreground">Chưa có báo cáo nào.</p>
+          )}
         </div>
       </div>
 
@@ -265,56 +226,6 @@ export default function Dashboard({ loaderData }: Route.ComponentProps) {
         <JobWatchWidget watches={watches ?? []} />
       </div>
 
-      <div className="fixed bottom-6 right-6 z-50">
-        {isAssistantOpen ? (
-          <div className="w-[calc(100vw-2rem)] sm:w-[360px] max-w-[360px] h-[500px] flex flex-col rounded-xl overflow-hidden border border-border bg-background motion-safe:animate-in motion-safe:slide-in-from-bottom-5 motion-safe:duration-300">
-            <header className="p-4 border-b bg-primary text-primary-foreground flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide">
-                <MessageSquare className="w-4 h-4" />
-                Maestro AI Analyst
-              </div>
-              <Button variant="ghost" size="icon" className="min-h-11 min-w-11 hover:bg-white/20 text-primary-foreground"
-                onClick={() => setIsAssistantOpen(false)}
-                aria-label="Đóng chat">
-                <X className="w-4 h-4" />
-              </Button>
-            </header>
-            <ScrollArea className="flex-1 p-4">
-              <div className="space-y-3">
-                {messages.map((m, i) => (
-                  <div key={i} className={`text-[12px] leading-relaxed px-3 py-2.5 rounded-xl max-w-[90%] ${
-                    m.role === "ai"
-                      ? "bg-muted/60 text-foreground border border-border/50"
-                      : "bg-primary/10 text-foreground border border-primary/20 ml-auto"
-                  }`}>
-                    {m.text}
-                  </div>
-                ))}
-                {chatFetcher.state !== "idle" && (
-                  <div className="text-[12px] px-3 py-2.5 rounded-xl bg-muted/60 border border-border/50 text-muted-foreground motion-safe:animate-pulse">
-                    Đang phân tích...
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-            <form onSubmit={handleChat} className="p-3 border-t bg-muted/20 shrink-0 flex gap-2" aria-label="Chat với AI Analyst">
-              <label htmlFor="chat-prompt" className="sr-only">Câu hỏi về thị trường</label>
-              <Input id="chat-prompt" name="prompt" placeholder="Hỏi về thị trường..." className="text-xs min-h-11 bg-background" autoComplete="off" />
-              <Button size="icon" type="submit" className="min-h-11 min-w-11 shrink-0" aria-label="Gửi câu hỏi">
-                <Send className="w-4 h-4" />
-              </Button>
-            </form>
-          </div>
-        ) : (
-          <Button
-            onClick={() => setIsAssistantOpen(true)}
-            className="h-14 w-14 rounded-full bg-primary text-primary-foreground hover:scale-110 motion-safe:transition-transform"
-            aria-label="Mở chat AI Analyst"
-          >
-            <MessageSquare className="w-6 h-6" />
-          </Button>
-        )}
-      </div>
     </div>
   );
 }

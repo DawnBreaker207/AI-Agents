@@ -1,78 +1,120 @@
+import asyncio
 import logging
+import re
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlparse
 
 import feedparser
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.utils.helpers import normalize_url, extract_domain, clean_html_snippet, is_homepage_path
+from app.utils.helpers import normalize_url, extract_domain, clean_html_snippet
+from app.utils.link_check import is_article_accessible as _is_article_accessible
 from app.models.source import SourceList
 from app.models.news import PendingNews
+from app.models.category import TopicWhitelist
 from app.services.notify import DiscordNotifier
 from app.core.config import settings
+from app.services.pipeline.stage2_filter import CRITICAL_KEYWORDS, LAYOFF_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
-_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    )
-}
 _HEAD_TIMEOUT = 10
 
 
-async def _is_article_accessible(url: str, client: httpx.AsyncClient) -> tuple[bool, str]:
+_LARGE_NUMBER_PATTERN = re.compile(
+    r'(\d{1,3}[,.]?\d{3}\+?)\s*(nhân viên|employees|jobs|workers|positions|staff|người)',
+    re.IGNORECASE
+)
+
+
+_BREAKING_DEDUP_HOURS = 24
+_FAST_LANE_CONCURRENCY = 3
+
+
+def _is_breaking_news(
+    title: str, snippet: str, whitelist: list[TopicWhitelist],
+) -> tuple[bool, str, str]:
+    """Rule-based fast filter: layoff/critical keyword + số liệu lớn hoặc
+    công ty khớp TopicWhitelist có force_keep=True (quản lý qua UI Sources).
+
+    Returns: (is_breaking, reason, matched_company).
+    """
+    combined = f"{title or ''} {(snippet or '')}".strip()
+    lowered = combined.lower()
+
+    has_urgent_kw = any(
+        kw.lower() in lowered for kw in CRITICAL_KEYWORDS + LAYOFF_KEYWORDS
+    )
+    if not has_urgent_kw:
+        return False, "", ""
+
+    large_match = _LARGE_NUMBER_PATTERN.search(combined)
+    if large_match:
+        return True, f"urgent keyword + large number '{large_match.group(0).strip()}'", ""
+
+    for wl in whitelist:
+        topic = str(wl.topic or "")
+        if topic and bool(wl.force_keep) and topic.lower() in lowered:
+            return True, f"force_keep watchlist '{topic}' + urgent keyword", topic
+
+    return False, "", ""
+
+
+async def _is_duplicate_breaking(
+    db: AsyncSession, company: str, hours: int = _BREAKING_DEDUP_HOURS,
+) -> bool:
+    """Chống spam Discord: cùng company + LAYOFF đã có KEEP_URGENT trong X giờ gần đây?"""
+    if not company:
+        return False
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    result = await db.execute(
+        select(PendingNews)
+        .where(PendingNews.status == "KEEP_URGENT")
+        .where(PendingNews.category == "LAYOFF")
+        .where(PendingNews.published_at != None)  # noqa: E711
+        .where(PendingNews.published_at >= cutoff)
+        .limit(50)
+    )
+    for row in result.scalars().all():
+        haystack = f"{row.title or ''} {row.snippet or ''}".lower()
+        if company.lower() in haystack:
+            return True
+    return False
+
+
+async def _run_fast_lane_stage3(news_id: int, title: str):
+    """Chạy Stage 3 cho 1 tin breaking trên session riêng (an toàn cho gather)."""
+    from app.database import AsyncSessionLocal
+    from app.services.pipeline.stage3_deep import DeepAnalysisStage
     try:
-        resp = await client.head(
-            url,
-            headers=_HEADERS,
-            follow_redirects=True,
-            timeout=_HEAD_TIMEOUT,
-        )
-        if resp.status_code >= 400:
-            return False, f"HTTP {resp.status_code}"
-
-        final_url = str(resp.url)
-        final_parsed = urlparse(final_url)
-
-        if is_homepage_path(final_parsed.path):
-            return False, f"Redirected to homepage: {final_url}"
-
-        original_domain = extract_domain(url)
-        final_domain = extract_domain(final_url)
-        if final_domain != original_domain:
-            orig_root = original_domain.split(".")[-2] if "." in original_domain else original_domain
-            final_root = final_domain.split(".")[-2] if "." in final_domain else final_domain
-            if orig_root != final_root:
-                return False, f"Redirected to different domain: {final_domain}"
-
-        return True, ""
-
-    except httpx.TimeoutException:
-        return False, "Timeout"
-    except httpx.TooManyRedirects:
-        return False, "Too many redirects"
+        async with AsyncSessionLocal() as db:
+            await DeepAnalysisStage().run(news_id, db)
     except Exception as e:
-        return False, f"Connection error: {type(e).__name__}"
+        logger.error(f"Fast-lane Stage 3 failed [news_id={news_id}]: {e}")
 
 
 class ScoutStage:
 
-    async def run(self, db: AsyncSession, time_window_hours: int | None = None) -> int:
+    async def run(self, db: AsyncSession, time_window_hours: int | None = None,
+                source_filter: str | None = None) -> int:
         notifier = DiscordNotifier()
-        result = await db.execute(
-            select(SourceList).where(SourceList.is_active == True)
-        )
+        query = select(SourceList).where(SourceList.is_active == True)
+        if source_filter:
+            query = query.where(SourceList.scan_priority == source_filter)
+        result = await db.execute(query)
         sources = result.scalars().all()
         new_count = 0
 
         cutoff_time = datetime.now(timezone.utc) - timedelta(
             hours=time_window_hours or settings.SCOUT_TIME_WINDOW_HOURS
         )
+
+        wl_result = await db.execute(
+            select(TopicWhitelist).where(TopicWhitelist.is_active == True)
+        )
+        whitelist = list(wl_result.scalars().all())
+        breaking_ids: list[tuple[int, str]] = []  # (news_id, title) — chạy Stage 3 sau loop
 
         async with httpx.AsyncClient(timeout=_HEAD_TIMEOUT) as client:
             for source in sources:
@@ -141,11 +183,32 @@ class ScoutStage:
                             published_at=published,
                             status="PENDING",
                         )
+                        is_breaking, breaking_reason, matched_co = _is_breaking_news(
+                            news.title, news.snippet or "", whitelist
+                        )
+                        if is_breaking:
+                            if matched_co and await _is_duplicate_breaking(db, matched_co):
+                                logger.info(
+                                    f"  [SKIP-DUP-BREAKING] '{news.title[:60]}' — "
+                                    f"sự kiện '{matched_co}' đã có alert trong "
+                                    f"{_BREAKING_DEDUP_HOURS}h qua"
+                                )
+                                is_breaking = False
+                            else:
+                                news.status = "KEEP_URGENT"
+                                news.category = "LAYOFF"
                         db.add(news)
                         await db.flush()
 
                         new_count += 1
                         source_new_count += 1
+
+                        if is_breaking:
+                            logger.warning(
+                                f"🚨 BREAKING: {news.title[:80]} — {breaking_reason} "
+                                f"— Stage 3 triggered"
+                            )
+                            breaking_ids.append((news.id, news.title))
 
                     # Dead-link health check
                     relevant = total_entries - source_skip_old  # chỉ tính entries trong time window
@@ -207,6 +270,19 @@ class ScoutStage:
                         logger.error(f"Scout error [{source.name}]: {error_msg}")
 
         await db.commit()
+
+        # Fast lane: chạy Stage 3 song song cho tin breaking (không block Scout,
+        # mỗi tin 1 session riêng + try/except riêng)
+        if breaking_ids:
+            sem = asyncio.Semaphore(_FAST_LANE_CONCURRENCY)
+
+            async def _guarded(news_id: int, title: str):
+                async with sem:
+                    await _run_fast_lane_stage3(news_id, title)
+
+            await asyncio.gather(*[_guarded(nid, t) for nid, t in breaking_ids])
+            logger.info(f"Scout fast lane: {len(breaking_ids)} breaking news → Stage 3.")
+
         if new_count > 0:
             from app.core.events import news_broadcaster
             news_broadcaster.broadcast({"type": "new_news"})

@@ -14,21 +14,22 @@ export async function loader({ request }: Route.LoaderArgs) {
   const level = url.searchParams.get("level") ?? "Tất cả";
   const locationType = url.searchParams.get("location_type") ?? "domestic";
   const city = url.searchParams.get("city") ?? "Tất cả";
+  const sort = url.searchParams.get("sort") ?? "";
 
   if (!keyword && level === "Tất cả") {
-    return { keyword, level, locationType, city, jobs: [] as JobResult[] };
+    return { keyword, level, locationType, city, sort, jobs: [] as JobResult[] };
   }
 
   try {
-    const data = await searchJobs(keyword, locationType, level, city);
-    return { keyword, level, locationType, city, jobs: Array.isArray(data) ? data : [] };
+    const data = await searchJobs(keyword, locationType, level, city, sort || undefined);
+    return { keyword, level, locationType, city, sort, jobs: Array.isArray(data) ? data : [] };
   } catch {
-    return { keyword, level, locationType, city, jobs: [] as JobResult[] };
+    return { keyword, level, locationType, city, sort, jobs: [] as JobResult[] };
   }
 }
 
 export default function JobsPage({ loaderData }: Route.ComponentProps) {
-  const { jobs, keyword, level, locationType, city } = loaderData;
+  const { jobs, keyword, level, locationType, city, sort } = loaderData;
   const navigation = useNavigation();
   const isLoading = navigation.state !== "idle"
     && navigation.location?.pathname === "/jobs";
@@ -117,10 +118,22 @@ export default function JobsPage({ loaderData }: Route.ComponentProps) {
               </div>
             )}
 
+            <div className="w-full xl:w-44 space-y-1.5 shrink-0">
+              <label htmlFor="job-sort" className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Sắp xếp</label>
+              <select
+                id="job-sort"
+                name="sort"
+                defaultValue={sort}
+                className="w-full px-3 py-3 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 motion-safe:transition-colors appearance-none min-h-11"
+              >
+                <option value="">Mặc định</option>
+                <option value="newest">Mới nhất trước</option>
+              </select>
+            </div>
+
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full xl:w-auto px-6 py-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 motion-safe:transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shrink-0 min-h-11"
+              disabled={isLoading}              className="w-full xl:w-auto px-6 py-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 motion-safe:transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shrink-0 min-h-11"
             >
               {isLoading ? (
                 <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full motion-safe:animate-spin" />
@@ -148,6 +161,25 @@ export default function JobsPage({ loaderData }: Route.ComponentProps) {
                   {job.source}
                 </span>
               </div>
+
+              {/* Badge verify tự động (có sẵn từ backend, không cần bấm tay) */}
+              {(job.deadline_status === "EXPIRED" || job.legit_flag === "SUSPICIOUS") && (
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {job.deadline_status === "EXPIRED" && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 text-[10px] font-medium border border-amber-200/50 dark:border-amber-800/50">
+                      ⚠️ Có thể đã hết hạn{job.deadline_date ? ` (${job.deadline_date})` : ""}
+                    </span>
+                  )}
+                  {job.legit_flag === "SUSPICIOUS" && (
+                    <span
+                      title={job.legit_reason || ""}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300 text-[10px] font-medium border border-red-200/50 dark:border-red-800/50"
+                    >
+                      🚩 Cần kiểm tra kỹ
+                    </span>
+                  )}
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-x-4 gap-y-2 mb-4 text-xs text-muted-foreground">
                 <div className="flex items-center gap-1.5 text-foreground/80 min-w-0">

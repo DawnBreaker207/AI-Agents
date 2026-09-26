@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
 from app.models.news import PendingNews
-from app.schemas.common import ResearchRequest, APIResponse
+from app.schemas.common import APIResponse
 from app.services.pipeline.orchestrator import run_pipeline
 from app.services.pipeline.stage3_deep import DeepAnalysisStage
 
@@ -87,15 +87,6 @@ async def _translate_titles_bg():
                 logger.error(f"[TranslateTask] Batch {i // BATCH_SIZE + 1} error: {e}")
 
     logger.info("[TranslateTask] Done translating existing titles.")
-
-
-@router.post("/research", summary="Trigger TSI research pipeline")
-async def research_topic(request: ResearchRequest):
-    logger.info(f"Manual research triggered: topic='{request.topic}'")
-    return APIResponse(
-        message=f"Hệ thống đang điều tra chiến lược: {request.topic}. Kết quả sẽ tự động lưu vào Dashboard.",
-        data={"status": "processing", "agent": "TechScout-01", "topic": request.topic}
-    )
 
 
 @router.post("/api/research/{news_id}", status_code=202)

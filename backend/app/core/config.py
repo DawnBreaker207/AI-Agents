@@ -44,6 +44,7 @@ class Settings(BaseSettings):
 
     # Pipeline magic numbers
     PIPELINE_INTERVAL_HOURS: int = 4
+    HIGH_PRIORITY_SCAN_MINUTES: int = 45
     GATEKEEPER_BATCH_SIZE: int = 10
     REACT_MAX_ITERATIONS: int = 5
     STAGE3_DELAY_SECONDS: int = 5

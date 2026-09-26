@@ -24,6 +24,7 @@ export interface ResearchReport {
     strategic_action_items?: string[] | null;
     impact_score: number;
     sentiment: Sentiment;
+    category?: string | null;  // category thật từ Gatekeeper (2.2)
     tags?: string[] | null;
     created_at: string;
 

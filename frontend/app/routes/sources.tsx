@@ -1,5 +1,5 @@
 import type { Route } from "./+types/sources";
-import { getSources, toggleSource, getWhitelist, addWhitelistTopic, deleteWhitelistTopic } from "~/lib/api";
+import { getSources, toggleSource, getWhitelist, addWhitelistTopic, deleteWhitelistTopic, getAliases, addAlias, deleteAlias } from "~/lib/api";
 import { Form, useNavigation, useActionData } from "react-router";
 import {
   Table, TableBody, TableCell, TableHead,
@@ -9,19 +9,20 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
-import { Radio, Power, PowerOff, ShieldAlert, Plus, Trash2, Settings, Circle } from "lucide-react";
+import { Radio, Power, PowerOff, ShieldAlert, Plus, Trash2, Settings, Circle, Briefcase } from "lucide-react";
 import { useRef, useEffect } from "react";
 
 export async function loader({ request }: Route.LoaderArgs) {
   try {
-    const [sources, whitelist] = await Promise.all([
+    const [sources, whitelist, aliases] = await Promise.all([
       getSources(),
-      getWhitelist()
+      getWhitelist(),
+      getAliases()
     ]);
-    return { sources, whitelist };
+    return { sources, whitelist, aliases };
   } catch (err) {
     console.error("Sources loader failed, returning empty states:", err);
-    return { sources: [], whitelist: [] };
+    return { sources: [], whitelist: [], aliases: [] };
   }
 }
 
@@ -46,13 +47,24 @@ export async function action({ request }: Route.ActionArgs) {
     if (topicId) {
       await deleteWhitelistTopic(topicId);
     }
+  } else if (intent === "add-alias") {
+    const canonical_role = formData.get("canonical_role") as string;
+    const alias = formData.get("alias") as string;
+    if (canonical_role && alias) {
+      await addAlias(canonical_role, alias);
+    }
+  } else if (intent === "delete-alias") {
+    const aliasId = Number(formData.get("aliasId"));
+    if (aliasId) {
+      await deleteAlias(aliasId);
+    }
   }
 
   return { success: true };
 }
 
 export default function SourcesPage({ loaderData }: Route.ComponentProps) {
-  const { sources, whitelist } = loaderData;
+  const { sources, whitelist, aliases } = loaderData;
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   const submittingId = navigation.formData?.get("sourceId");
@@ -256,6 +268,79 @@ export default function SourcesPage({ loaderData }: Route.ComponentProps) {
                       <TableRow>
                         <TableCell colSpan={4} className="text-center text-muted-foreground/60 py-10 text-xs italic">
                           Chưa có từ khóa ưu tiên nào được cấu hình
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+            </CardContent>
+          </Card>
+
+          {/* ── ROLE ALIAS (4.2): từ điển đồng nghĩa vai trò cho Job Search ── */}
+          <Card className="border border-border/50 rounded-xl overflow-hidden">
+            <CardHeader className="border-b border-border/50">
+              <CardTitle className="text-[13px] font-medium tracking-tight flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-muted-foreground" /> Role Alias — Job Search
+              </CardTitle>
+              <CardDescription className="text-xs italic">
+                Tên gọi tương đương của cùng 1 vị trí (VD: Backend Developer ↔ Server-side Engineer).
+                Tìm kiếm sẽ tự mở rộng theo alias.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 space-y-6">
+              <Form method="post" className="flex flex-wrap gap-4 items-end bg-muted/10 p-4 rounded-xl border">
+                <input type="hidden" name="intent" value="add-alias" />
+                <div className="flex-1 min-w-[160px] space-y-1.5">
+                  <label htmlFor="canonical-role" className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground block">Vai trò chuẩn</label>
+                  <Input id="canonical-role" name="canonical_role" required placeholder="Ví dụ: Backend Developer" className="min-h-11 text-xs bg-background" />
+                </div>
+                <div className="flex-1 min-w-[160px] space-y-1.5">
+                  <label htmlFor="alias-name" className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground block">Tên tương đương (alias)</label>
+                  <Input id="alias-name" name="alias" required placeholder="Ví dụ: Server-side Engineer" className="min-h-11 text-xs bg-background" />
+                </div>
+                <Button type="submit" disabled={isSubmitting} size="sm" className="h-9 px-4 font-medium text-xs uppercase tracking-wider gap-1">
+                  <Plus size={14} /> Thêm
+                </Button>
+              </Form>
+
+              <div className="border rounded-xl overflow-hidden bg-background">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/10">
+                      <TableHead>Vai trò chuẩn</TableHead>
+                      <TableHead>Alias</TableHead>
+                      <TableHead className="w-16 text-right"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {aliases.map(a => (
+                      <TableRow key={a.id} className="hover:bg-muted/5 motion-safe:transition-colors">
+                        <TableCell className="font-medium text-xs">{a.canonical_role}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{a.alias}</TableCell>
+                        <TableCell className="text-right">
+                          <Form method="post">
+                            <input type="hidden" name="intent" value="delete-alias" />
+                            <input type="hidden" name="aliasId" value={a.id} />
+                            <Button
+                              type="submit"
+                              variant="ghost"
+                              size="icon"
+                              disabled={isSubmitting}
+                              className="text-muted-foreground hover:text-destructive min-h-11 min-w-11 rounded-lg"
+                              aria-label={`Xóa alias ${a.alias}`}
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          </Form>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {aliases.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-muted-foreground/60 py-10 text-xs italic">
+                          Chưa có alias nào được cấu hình
                         </TableCell>
                       </TableRow>
                     )}

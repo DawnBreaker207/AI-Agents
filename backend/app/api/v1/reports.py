@@ -64,6 +64,30 @@ def _sanitize_report_field(value) -> str | None:
     return str(value) or None
 
 
+def _report_to_dict(r) -> dict:
+    """Shape chuẩn dùng chung cho strategic/history (2.4) — gồm category thật (2.2)."""
+    return {
+        "id": r.id,
+        "title": r.title,
+        "topic": getattr(r, "topic", r.title),
+        "summary": r.executive_summary or "",
+        "original_source": r.original_source,
+        "executive_summary": r.executive_summary,
+        "technical_deep_dive": _sanitize_report_field(r.technical_deep_dive),
+        "vietnam_market_impact": _sanitize_report_field(r.vietnam_market_impact),
+        "strategic_action_items": r.strategic_action_items or [],
+        "impact_score": r.impact_score,
+        "sentiment": r.sentiment,
+        "category": r.category,
+        "tags": r.tags or [],
+        "created_at": r.created_at,
+        "source_citations": (
+            r.source_citations
+            or ([r.original_source] if r.original_source else [])
+        ),
+    }
+
+
 @router.get("/history", summary="Get research report history")
 async def get_history(category: str | None = None, db: AsyncSession = Depends(get_db)):
     query = select(ResearchReport)
@@ -82,6 +106,7 @@ async def get_history(category: str | None = None, db: AsyncSession = Depends(ge
             "created_at": r.created_at,
             "last_updated": r.created_at,
             "sentiment": r.sentiment or "Trung tính",
+            "category": r.category,
             "categories": parse_json_column(r.tags),
             "regions": ["Việt Nam"],
             "sources": [r.original_source] if r.original_source else [],
@@ -135,36 +160,23 @@ async def get_report_by_id(report_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/api/reports/strategic")
 async def get_strategic_reports(
-    page: int = 1, size: int = 20,
+    page: int = 1, size: int = 20, scope: str = "all",
     db: AsyncSession = Depends(get_db)
 ):
+    """Endpoint gộp (2.4): scope=all (mặc định) | strategic (impact>=8) | history (all, thứ tự id)."""
     offset = (page - 1) * size
-    result = await db.execute(
-        select(ResearchReport)
-        .order_by(ResearchReport.created_at.desc())
-        .offset(offset).limit(size)
-    )
+    query = select(ResearchReport)
+    if scope == "strategic":
+        query = query.where(ResearchReport.impact_score >= 8)
+        query = query.order_by(ResearchReport.created_at.desc())
+    elif scope == "history":
+        query = query.order_by(ResearchReport.id.desc())
+    else:
+        query = query.order_by(ResearchReport.created_at.desc())
+    query = query.offset(offset).limit(size)
+    result = await db.execute(query)
     reports = result.scalars().all()
-    return [
-        {
-            "id": r.id,
-            "title": r.title,
-            "original_source": r.original_source,
-            "executive_summary": r.executive_summary,
-            "technical_deep_dive": _sanitize_report_field(r.technical_deep_dive),
-            "vietnam_market_impact": _sanitize_report_field(r.vietnam_market_impact),
-            "strategic_action_items": r.strategic_action_items or [],
-            "impact_score": r.impact_score,
-            "sentiment": r.sentiment,
-            "tags": r.tags or [],
-            "created_at": r.created_at,
-            "source_citations": (
-                r.source_citations
-                or ([r.original_source] if r.original_source else [])
-            ),
-        }
-        for r in reports
-    ]
+    return [_report_to_dict(r) for r in reports]
 
 
 @router.get("/api/reports/{report_id}")
@@ -201,6 +213,7 @@ async def get_report_detail(
         "strategic_action_items": r.strategic_action_items or [],
         "impact_score": r.impact_score,
         "sentiment": r.sentiment,
+        "category": r.category,
         "tags": r.tags or [],
         "created_at": r.created_at,
         "source_citations": citations,
